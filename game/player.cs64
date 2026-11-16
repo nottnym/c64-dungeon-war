@@ -2,6 +2,7 @@
 //  Dungeon War – hráči: pohyb po mriežke chodieb, steny, tunely, vstupná brána, sprite
 //  Pozícia (px, py) v pixeloch od ľavého horného rohu bludiska; stred bunky (cx, cy) = (24·cx, 24·cy).
 //  Smer sa mení len v strede bunky (okrem otočenia späť), takže postava je vždy „v strede chodby“.
+//  Pohyb ide o jednu bunku; v jej strede pokračuje len pri držanom joysticku, inak zastane.
 // ============================================================================
 
 const CELL: byte = 24
@@ -80,21 +81,24 @@ function movePlayer(p: byte, joy: byte): void {
         var cx: byte = x / CELL
         var cy: byte = y / CELL
         if (cy < MZ_H) { pcx[p] = cx  pcy[p] = cy }
-        // tunel: zo stredu krajnej bunky ďalej von → druhá strana
-        if (cy == TUN_ROW && tunShut == 0) {
-            if (cx == 0 && d == D_LEFT && (want == D_LEFT || want == 0)) {
+        // Pohyb ide vždy len o jednu bunku: v strede ďalšej sa pokračuje, len kým joystick drží smer
+        // (2026-11-16). held = joystick stále tlačí aktuálny smer.
+        var held: bool = (joy & d) != 0
+        // tunel: zo stredu krajnej bunky ďalej von → druhá strana (len pri držanom smere)
+        if (cy == TUN_ROW && tunShut == 0 && held) {
+            if (cx == 0 && d == D_LEFT) {
                 px[p] = MAX_X
                 closeTunnels()
                 return
             }
-            if (cx == MZ_W - 1 && d == D_RIGHT && (want == D_RIGHT || want == 0)) {
+            if (cx == MZ_W - 1 && d == D_RIGHT) {
                 px[p] = 0
                 closeTunnels()
                 return
             }
         }
         if (want != 0 && canGo(cx, cy, want)) { d = want }
-        else { if (d != 0 && !canGo(cx, cy, d)) { d = 0 } }
+        else { if (!held || !canGo(cx, cy, d)) { d = 0 } }
     }
     pdir[p] = d
     if (d == 0) { return }

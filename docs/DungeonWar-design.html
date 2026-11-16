@@ -100,8 +100,8 @@ radare a zblízka.</p>
 <tr><td>2</td><td>Lovkyňa so samostrelom</td><td>oranžová (text v stavovom riadku žltý – hires znak má len farby 0–7)</td><td>joystick port 1</td><td>vstupná brána vpravo dole</td></tr>
 </table>
 <ul>
-<li>Pohyb v 4 smeroch po chodbách; zatáčanie sa „prichytí“ na najbližšiu križovatku (tolerancia ±3 px), aby sa
-hralo plynulo.</li>
+<li>Pohyb v 4 smeroch po chodbách, vždy <b>o jednu bunku</b>: v strede ďalšej bunky hráč pokračuje, len kým drží
+joystick v smere pohybu (alebo v inom voľnom smere), inak zastane (úprava 2026-11-16).</li>
 <li>Fire = šíp v smere pohľadu. Na obrazovke je najviac <b>1 šíp na hráča</b>; ďalší až po zásahu alebo náraze do steny.</li>
 <li>Nový hráč (štart alebo po smrti) čaká vo <b>vstupnej bráne</b> s odpočtom 5 s (číslice nad bránou). Vyjde po
 stlačení fire alebo po odpočte. Kým je v bráne, nedá sa zasiahnuť.</li>
@@ -401,6 +401,10 @@ k bunke hráča, 1/4 náhodne (8-bit LFSR <code>rand8</code>), v slepej uličke 
 <li>Koniec kódu <code>$28E2</code> (+2,4 KB).</li>
 <li>Zatiaľ chýba: príšery sa navzájom prekrývajú (riešiť v kroku 5 – rozostupy pri objavovaní a v AI).</li>
 </ul>
+
+<h3>Úprava pohybu hráča (2026-11-16)</h3>
+<ul><li>Pohyb ide o jednu bunku; v jej strede pokračuje len pri držanom joysticku (aj cez tunel), inak zastane.
+Overené: krátke stlačenie = presne 24 px (y 144 → 120 → 96).</li></ul>
 
 <h3>Zistenia o C#64 (zoznam námetov pre kompilátor a knižnice)</h3>
 <table>
