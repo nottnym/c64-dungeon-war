@@ -91,13 +91,36 @@ inline function absDiff(a: byte, b: byte): byte {      // inline: volá sa v hor
 var dist: byte[66] = new byte[66]
 var bfsQ: byte[66] = new byte[66]
 
-function computeDist(tx: byte, ty: byte): void {
+// Najbližší živý hráč k bunke (Manhattan), 255 = žiadny.
+function nearestPlayer(cx: byte, cy: byte): byte {
+    var best: byte = 255
+    var bd: byte = 255
+    for p = 0 to 1 {
+        if (pstate[p] == PS_ALIVE) {
+            var d: byte = absDiff(cx, pcx[p]) + absDiff(cy, pcy[p])
+            if (d < bd) { bd = d  best = p }
+        }
+    }
+    return best
+}
+
+// BFS z buniek všetkých živých hráčov naraz (vzdialenosť k najbližšiemu); bez živého hráča z bunky hráča 1.
+function computeDist(): void {
     for i = 0 to 65 { dist[i] = 255 }
-    var t: byte = ty * MZ_W + tx
-    dist[t] = 0
-    bfsQ[0] = t
+    var tail: byte = 0
+    for p = 0 to 1 {
+        if (pstate[p] == PS_ALIVE) {
+            var t: byte = pcy[p] * MZ_W + pcx[p]
+            if (dist[t] != 0) { dist[t] = 0  bfsQ[tail] = t  tail = tail + 1 }
+        }
+    }
+    if (tail == 0) {
+        var t0: byte = pcy[0] * MZ_W + pcx[0]
+        dist[t0] = 0
+        bfsQ[0] = t0
+        tail = 1
+    }
     var head: byte = 0
-    var tail: byte = 1
     while (head != tail) {
         var c: byte = bfsQ[head]
         head = head + 1
@@ -136,8 +159,10 @@ function chooseDir(i: byte): byte {
     var cx: byte = mcx[i]
     var cy: byte = mcy[i]
     var back: byte = opposite(mdir[i])
-    var tx: byte = pcx[0]
-    var ty: byte = pcy[0]
+    var tp: byte = nearestPlayer(cx, cy)         // cieľ = najbližší živý hráč (255 = nikto → túlanie)
+    var tx: byte = 0
+    var ty: byte = 0
+    if (tp != 255) { tx = pcx[tp]  ty = pcy[tp] }
     var shade: bool = mkind[i] == M_SHADE
     var best: byte = 0
     var bestDist: byte = 255
@@ -175,7 +200,7 @@ function chooseDir(i: byte): byte {
         return 0
     }
     // Hráč v bráne alebo mŕtvy → túlanie (inak by príšery čakali pri výstupe z brány).
-    var wander: bool = pstate[0] != PS_ALIVE
+    var wander: bool = tp == 255
     var r: byte = 64
     if (shade) { r = 16 }
     if (n > 1 && (wander || rand8() < r)) {
@@ -222,13 +247,20 @@ var sy: byte[2] = [0, 0]
 var sdir: byte[2] = [0, 0]
 var sown: byte[2] = [0, 0]                // príšera, ktorá strelu vystrelila (najviac 1 strela na kostlivca)
 
-// Vidí kostlivec v strede bunky hráča v rovnej chodbe? Vracia smer alebo 0.
+// Vidí kostlivec niektorého živého hráča v rovnej chodbe? Vracia smer alebo 0.
 function seesPlayer(i: byte): byte {
-    if (pstate[0] != PS_ALIVE) { return 0 }
+    for p = 0 to 1 {
+        if (pstate[p] == PS_ALIVE) {
+            var d: byte = seesCell(i, pcx[p], pcy[p])
+            if (d != 0) { return d }
+        }
+    }
+    return 0
+}
+
+function seesCell(i: byte, tx: byte, ty: byte): byte {
     var cx: byte = mcx[i]
     var cy: byte = mcy[i]
-    var tx: byte = pcx[0]
-    var ty: byte = pcy[0]
     var d: byte = 0
     if (cy == ty && cx != tx) {
         d = D_RIGHT
@@ -367,7 +399,9 @@ function monY(i: byte): byte {
 function monVisible(i: byte): bool {
     if (mkind[i] != M_SHADE) { return true }
     if (mshow[i] != 0) { return true }
-    return absDiff(mcx[i], pcx[0]) + absDiff(mcy[i], pcy[0]) < 3
+    var p: byte = nearestPlayer(mcx[i], mcy[i])
+    if (p == 255) { return false }
+    return absDiff(mcx[i], pcx[p]) + absDiff(mcy[i], pcy[p]) < 3
 }
 
 function monShape(i: byte): byte {
@@ -421,8 +455,10 @@ function updateMonster(i: byte): void {
         return
     }
     if (mresp[i] == 0) { return }
-    if (mresp[i] == 1 && pstate[0] == PS_ALIVE &&
-        absDiff(mcx[i], pcx[0]) + absDiff(mcy[i], pcy[0]) < SAFE_DIST) { return }   // code review č. 4
+    if (mresp[i] == 1) {                         // code review č. 4: nie pri živom hráčovi
+        var np: byte = nearestPlayer(mcx[i], mcy[i])
+        if (np != 255 && absDiff(mcx[i], pcx[np]) + absDiff(mcy[i], pcy[np]) < SAFE_DIST) { return }
+    }
     mresp[i] = mresp[i] - 1
     if (mresp[i] == 0) { spawnMonster(i, mkind[i]) }
 }

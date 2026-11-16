@@ -486,6 +486,21 @@ Všetko v čistom C#64 – bez <code>asm {}</code>.</p>
 hráč joystickom dole do brány nevráti. Koniec kódu <code>$329B</code>. Poznámka k hrateľnosti: slizáky zatiaľ hráča zabijú
 rýchlo – vyladí sa v kroku 10.</p>
 
+<h3>Krok 6 – hráč 2 (2026-11-16)</h3>
+<ul>
+<li>Hráč 2 na joysticku 1 sa pripojí tlačidlom fire (raz za hru, výzva „FIRE:JOIN“ v stavovom riadku), vychádza
+z pravej brány, oranžový; skóre a životy vpravo. Úvodná obrazovka s voľbou 1/2 hráčov príde v kroku 9.</li>
+<li>Šíp hráča zasiahne aj druhého hráča: zasiahnutý stratí život, strelec +1000.</li>
+<li>Príšery mieria na bližšieho živého hráča; BFS z oboch živých hráčov naraz (prepočet pri zmene buniek alebo stavov);
+kostlivce strieľajú na oboch; tieň sa zviditeľní pri ktoromkoľvek hráčovi; návrat príšery sa odloží pri ktoromkoľvek.</li>
+<li>Koniec hry, až keď sú vonku všetci hráči. 12 logických spritov.</li>
+<li>Overené v C64U Code: pripojenie hráča 2 (port 1), brána s odpočtom, výstup, 12 spritov bez vypadnutia.</li>
+<li>Koniec kódu <code>$49D2</code>. <b>Výkon:</b> s dvoma hráčmi <code>wasLate</code> ~20 % (6/30). Fázy: hráči ~26,
+príšery ~46, strely a zásahy ~46, radar 16–44, sprity ~104, <code>update</code> končí za hranicou snímku. Drahé sú najmä
+volania funkcií na každý sprite a 16-bitové sčítania/porovnania (<code>48 + x</code>, <code>x &gt; 255</code> v
+<code>setPos</code>) – pozri zistenia č. 3, 8, 9.</li>
+</ul>
+
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
 <ul><li><code>player.cs64</code>: stojaci hráč čelom k stene + joystick do protismeru → len otočenie (<code>pturn</code>,
 10 snímok); pohyb pri ďalšom stlačení alebo dlhšom držaní. Overené: v bunke (4,0) otočenie doprava → doľava bez

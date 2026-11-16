@@ -9,7 +9,8 @@
 //    $C000-$CBFF  premenné C#64, halda $CC00-$CDFF
 //    $CE00-$CFFF  tabuľky std:mux2 (nič iné tam nesmie byť)
 //
-//  Krok 5: kostlivce (streľba), tiene (neviditeľné, BFS), radar. Sprity: 0 hráč 1, 1-6 príšery, 7 šíp, 8-9 strely príšer.
+//  Krok 6: hráč 2 (joystick port 1, pripojí sa tlačidlom fire), vzájomné zásahy. Sprity: 0 hráč 1, 1-6 príšery, 7 šíp 1,
+//  8-9 strely príšer, 10 hráč 2, 11 šíp 2.
 //  Ladenie: zápis n (1–4) na $02FF cez monitor → nová hra na podlaží n.
 // ============================================================================
 
@@ -85,10 +86,14 @@ function showLevel(): void {
 
 const SPR_ARROW1: byte = 1 + MAX_MON     // logický sprite šípu hráča 1
 const SPR_SHOT0: byte = 2 + MAX_MON      // strely príšer
-const N_SPRITES: byte = 4 + MAX_MON
+const SPR_P2: byte = 4 + MAX_MON
+const SPR_ARROW2: byte = 5 + MAX_MON
+const N_SPRITES: byte = 6 + MAX_MON
+const T_JOIN:  byte[] = screenCodes("FIRE:JOIN")      // "=" vo vlastnom písme nie je
+const T_BLANK9: byte[] = screenCodes("         ")
+var p2Joined: bool = false
 const DEBUG_LEVEL: uint16 = $02FF
-var distX: byte = 255                    // bunka hráča, pre ktorú platí mapa vzdialeností
-var distY: byte = 255
+var distKey: byte[5] = [255, 255, 255, 255, 255]   // bunky a stavy hráčov, pre ktoré platí mapa vzdialeností
 // MERANIE (dočasné): max. dĺžka logiky snímku v rastroch / 2 – $02FD bez BFS, $02FE so BFS
 const DBG_T: uint16 = $02FD
 // MERANIE (dočasné): zápis 1 na $02F4 → v najbližšom hernom snímku sa uložia rastre (/2) po fázach do $02F5–$02FB
@@ -161,6 +166,39 @@ function drawSprites(): void {
     sh = 0
     if (aon[0] != 0) { sh = arrowShape(0) }
     putSprite(SPR_ARROW1, ax[0], ay[0], 1, sh)
+    sh = 0
+    if (pstate[1] != PS_OUT) { sh = playerSprite(1) }
+    putSprite(SPR_P2, px[1], py[1], COL_P2, sh)
+    sh = 0
+    if (aon[1] != 0) { sh = arrowShape(1) }
+    putSprite(SPR_ARROW2, ax[1], ay[1], 7, sh)
+}
+
+// Hráč 2 sa pripojí (raz za hru) tlačidlom fire na joysticku 1.
+function joinP2(): void {
+    p2Joined = true
+    printAt(1, 31, T_BLANK9, 1)
+    plives[1] = 3
+    showLives(1, 3)
+    pinv[1] = 0
+    pfirePrev[1] = 16
+    enterGate(1)
+}
+
+// Mapa vzdialeností sa prepočíta len pri zmene buniek alebo stavov hráčov.
+function distChanged(): bool {
+    var a: byte = 0
+    if (pstate[0] == PS_ALIVE) { a = 1 }
+    if (pstate[1] == PS_ALIVE) { a = a | 2 }
+    if (pcx[0] == distKey[0] && pcy[0] == distKey[1] && pcx[1] == distKey[2] && pcy[1] == distKey[3] && a == distKey[4]) {
+        return false
+    }
+    distKey[0] = pcx[0]
+    distKey[1] = pcy[0]
+    distKey[2] = pcx[1]
+    distKey[3] = pcy[1]
+    distKey[4] = a
+    return true
 }
 
 // Nová hra: podlažie, skóre, životy, príšery, hráč v bráne.
@@ -168,14 +206,21 @@ function newGame(): void {
     clearScreen()
     showLevel()
     resetScore(0)
+    resetScore(1)
     plives[0] = 3
     showLives(0, 3)
     aon[0] = 0
+    aon[1] = 0
+    pstate[1] = PS_OUT                     // hráč 2 sa pripojí tlačidlom fire na joysticku 1
+    plives[1] = 0
+    p2Joined = false
+    showLives(1, 0)
+    printAt(1, 31, T_JOIN, 7)
     tunShut = 0                            // code review č. 5 (drawMaze kreslí tunely otvorené)
     pinv[0] = 0
     pfirePrev[0] = 1                       // fire držaný z obrazovky QUEST OVER nevyvedie hneď z brány
     spawnLevel(level)
-    distX = 255                            // nové podlažie: mapu vzdialeností prepočítať
+    distKey[4] = 255                       // nové podlažie: mapu vzdialeností prepočítať
     initRadar()
     enterGate(0)
     updateMonPos()                         // polohy spritov z novej hry hneď (review č. 4)
@@ -199,11 +244,11 @@ function main(): void {
     poke(DEBUG_LEVEL, 0)
     poke(DBG_T, 0)                         // meranie od nuly (review č. 7)
     poke(DBG_T + 1, 0)
-    distX = 255
     while (true) {
         Mux2.waitFrame()                   // 1. začiatok snímku
-        var joy: byte = Joy.read2()        // 2. logika
-        var fire: bool = Joy.fire(joy)
+        var joy: byte = Joy.read2()        // 2. logika – hráč 1 port 2
+        var joy1: byte = Joy.read1()       //            hráč 2 port 1
+        var fire: bool = Joy.fire(joy) || Joy.fire(joy1)
         var press: bool = fire && !firePrev   // nové stlačenie (code review č. 6)
         firePrev = fire
         frame = frame + 1
@@ -222,15 +267,16 @@ function main(): void {
         } else {
             if (peek(DBG_REQ) != 0 && (frame & 7) != 0) { dbgOn = 1  poke(DBG_REQ, 0) }
             mark(0)
+            if (!p2Joined && Joy.fire(joy1)) { joinP2() }
             updatePlayer(0, joy)
             moveArrow(0)
+            updatePlayer(1, joy1)
+            moveArrow(1)
             updateTunnels()
             mark(1)
             decBudget = 2
-            if (pcx[0] != distX || pcy[0] != distY) {           // mapa vzdialeností len pri zmene bunky hráča
-                distX = pcx[0]
-                distY = pcy[0]
-                computeDist(distX, distY)
+            if (distChanged()) {                                 // mapa vzdialeností len pri zmene hráčov
+                computeDist()
                 decBudget = 1
             }
             for i = 0 to MAX_MON - 1 { updateMonster(i) }
@@ -241,7 +287,7 @@ function main(): void {
             mark(3)
             updateRadar()
             mark(4)
-            if (pstate[0] == PS_OUT) {
+            if (pstate[0] == PS_OUT && pstate[1] == PS_OUT) {   // koniec, až keď sú vonku všetci hráči
                 son[0] = 0                         // strely nezamrznú na obrazovke (review č. 4)
                 son[1] = 0
                 printAt(11, 15, T_QUEST_OVER, 2)
