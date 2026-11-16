@@ -36,17 +36,10 @@ var pturn: byte[2] = [0, 0]
 var tunShut: byte = 0                    // > 0 = tunely zavalené (odpočet snímok)
 
 // Dá sa z bunky (cx, cy) ísť smerom d? Brána: z nej len hore; do nej sa už nevracia.
+// Voľné smery z tabuľky open[] (computeOpen, bez tunelov – tunel rieši movePlayer cez closeTunnels).
 function canGo(cx: byte, cy: byte, d: byte): bool {
     if (cy == 6) { return d == D_UP }
-    var i: byte = cy * MZ_W + cx
-    if (d == D_UP) { return cy > 0 && (cell[i - MZ_W] & 2) == 0 }
-    if (d == D_DOWN) { return cy < MZ_H - 1 && (cell[i] & 2) == 0 }
-    if (d == D_LEFT) {
-        if (cx == 0) { return false }                       // okraj: tunel rieši movePlayer (closeTunnels)
-        return (cell[i - 1] & 1) == 0
-    }
-    if (cx == MZ_W - 1) { return false }
-    return (cell[i] & 1) == 0
+    return (open[cy * MZ_W + cx] & d) != 0
 }
 
 function opposite(d: byte): byte {

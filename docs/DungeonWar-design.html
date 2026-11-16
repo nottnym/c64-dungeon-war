@@ -501,6 +501,22 @@ volania funkcií na každý sprite a 16-bitové sčítania/porovnania (<code>48 
 <code>setPos</code>) – pozri zistenia č. 3, 8, 9.</li>
 </ul>
 
+<h3>Optimalizácia pre 2 hráčov (2026-11-16, čistý C#64)</h3>
+<table>
+<tr><th>úprava</th><th>účinok (rastre)</th></tr>
+<tr><td><code>putSprite</code>, tvar príšery <code>inline</code></td><td>sprity ~104 → ~60–80</td></tr>
+<tr><td>zásahy: <code>near()</code> cez pretečenie bajtu, vnorené <code>if</code> namiesto reťazí <code>&amp;&amp;</code></td><td>~46 → ~26 (podľa stavu hráčov až ~46)</td></tr>
+<tr><td><code>canGo</code> hráča z tabuľky <code>open[]</code></td><td>hráči ~26 → ~14–20</td></tr>
+<tr><td>BFS po častiach (16 buniek/snímok, dvojitá mapa <code>distN</code> → <code>dist</code>)</td><td>odstránená špička ~120 rastrov pri prepočte</td></tr>
+<tr><td>mapa obsadenosti <code>occ[66]</code> (rezervácie buniek), <code>inline monCanGo</code></td><td>lacnejšie rozhodnutia AI</td></tr>
+</table>
+<p>Výsledok s dvoma hráčmi v bludisku: <code>wasLate</code> ~22 % → ~12–15 % (merania kolíšu podľa stavov hráčov), sprity
+nevypadávajú; typický snímok končí okolo rastra 290–300 z 312. Rozpočet: štart (IRQ mux2) 38, hráči ~20, príšery ~46,
+zásahy 26–46, radar ~16, sprity ~80, <code>Mux2.update</code> (12 spritov) ~46. Koniec kódu <code>$55B1</code>
+(<code>inline</code> pridalo ~2,3 KB).</p>
+<p>Ďalšie možnosti: logika príšer striedavo (polovica príšer v párnom, polovica v nepárnom snímku, dvojnásobný krok),
+zlepšenie prekladača C#64 (16-bitové porovnania s konštantou a bajtové podmienky – zistenia č. 3, 8, 9).</p>
+
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
 <ul><li><code>player.cs64</code>: stojaci hráč čelom k stene + joystick do protismeru → len otočenie (<code>pturn</code>,
 10 snímok); pohyb pri ďalšom stlačení alebo dlhšom držaní. Overené: v bunke (4,0) otočenie doprava → doľava bez

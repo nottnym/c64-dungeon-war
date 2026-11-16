@@ -75,7 +75,7 @@ function computeOpen(): void {
 }
 
 // Príšera smie ísť z bunky smerom d? (bez tunelov a brán)
-function monCanGo(cx: byte, cy: byte, d: byte): bool {
+inline function monCanGo(cx: byte, cy: byte, d: byte): bool {   // inline: AI ho volá 4–5× na rozhodnutie
     if (cy >= MZ_H) { return false }             // mimo bludiska (riadok brány) – nikdy nečítať za poľom cell
     return (open[cy * MZ_W + cx] & d) != 0
 }
@@ -105,52 +105,82 @@ function nearestPlayer(cx: byte, cy: byte): byte {
 }
 
 // BFS z buniek všetkých živých hráčov naraz (vzdialenosť k najbližšiemu); bez živého hráča z bunky hráča 1.
-function computeDist(): void {
-    for i = 0 to 65 { dist[i] = 255 }
+// Rozložené do viacerých snímkov (meranie 2026-11-16: celé BFS naraz ~120 rastrov → oneskorené snímky pri 2 hráčoch):
+// bfsStart pripraví novú mapu v distN, bfsStep spracuje najviac BFS_STEP buniek za snímok a po dokončení ju skopíruje
+// do dist. Kým nie je hotová, tiene idú podľa predošlej mapy (stará je len pár snímkov).
+const BFS_STEP: byte = 16
+var distN: byte[66] = new byte[66]
+var bfsHead: byte = 0
+var bfsTail: byte = 0
+var bfsBusy: bool = false
+
+function bfsStart(): void {
+    for i = 0 to 65 { distN[i] = 255 }
     var tail: byte = 0
     for p = 0 to 1 {
         if (pstate[p] == PS_ALIVE) {
             var t: byte = pcy[p] * MZ_W + pcx[p]
-            if (dist[t] != 0) { dist[t] = 0  bfsQ[tail] = t  tail = tail + 1 }
+            if (distN[t] != 0) { distN[t] = 0  bfsQ[tail] = t  tail = tail + 1 }
         }
     }
     if (tail == 0) {
         var t0: byte = pcy[0] * MZ_W + pcx[0]
-        dist[t0] = 0
+        distN[t0] = 0
         bfsQ[0] = t0
         tail = 1
     }
-    var head: byte = 0
-    while (head != tail) {
+    bfsHead = 0
+    bfsTail = tail
+    bfsBusy = true
+}
+
+function bfsStep(): void {
+    var head: byte = bfsHead
+    var tail: byte = bfsTail
+    var k: byte = BFS_STEP
+    while (head != tail && k != 0) {
+        k = k - 1
         var c: byte = bfsQ[head]
         head = head + 1
-        var nd: byte = dist[c] + 1
+        var nd: byte = distN[c] + 1
         var o: byte = open[c]                    // voľné smery bunky (computeOpen)
         var n: byte = 0
-        if ((o & D_UP) != 0) { n = c - MZ_W  if (dist[n] == 255) { dist[n] = nd  bfsQ[tail] = n  tail = tail + 1 } }
-        if ((o & D_DOWN) != 0) { n = c + MZ_W  if (dist[n] == 255) { dist[n] = nd  bfsQ[tail] = n  tail = tail + 1 } }
-        if ((o & D_LEFT) != 0) { n = c - 1  if (dist[n] == 255) { dist[n] = nd  bfsQ[tail] = n  tail = tail + 1 } }
-        if ((o & D_RIGHT) != 0) { n = c + 1  if (dist[n] == 255) { dist[n] = nd  bfsQ[tail] = n  tail = tail + 1 } }
+        if ((o & D_UP) != 0) { n = c - MZ_W  if (distN[n] == 255) { distN[n] = nd  bfsQ[tail] = n  tail = tail + 1 } }
+        if ((o & D_DOWN) != 0) { n = c + MZ_W  if (distN[n] == 255) { distN[n] = nd  bfsQ[tail] = n  tail = tail + 1 } }
+        if ((o & D_LEFT) != 0) { n = c - 1  if (distN[n] == 255) { distN[n] = nd  bfsQ[tail] = n  tail = tail + 1 } }
+        if ((o & D_RIGHT) != 0) { n = c + 1  if (distN[n] == 255) { distN[n] = nd  bfsQ[tail] = n  tail = tail + 1 } }
+    }
+    bfsHead = head
+    bfsTail = tail
+    if (head == tail) {
+        for i = 0 to 65 { dist[i] = distN[i] }
+        bfsBusy = false
     }
 }
 
-// Je bunka (nx, ny) obsadená inou príšerou (stojí v nej alebo do nej mieri)?
-function occupied(self: byte, nx: byte, ny: byte): bool {
-    for j = 0 to MAX_MON - 1 {
-        if (j != self && mtype[j] != M_NONE) {
-            var jx: byte = mcx[j]
-            var jy: byte = mcy[j]
-            if (moff[j] != 0) {
-                var dj: byte = mdir[j]
-                if (dj == D_UP) { jy = jy - 1 }
-                if (dj == D_DOWN) { jy = jy + 1 }
-                if (dj == D_LEFT) { jx = jx - 1 }
-                if (dj == D_RIGHT) { jx = jx + 1 }
-            }
-            if (jx == nx && jy == ny) { return true }
-        }
-    }
-    return false
+// Celá mapa naraz (nová hra/podlažie – tiene majú hneď platnú mapu).
+function computeDist(): void {
+    bfsStart()
+    while (bfsBusy) { bfsStep() }
+}
+
+
+// Mapa obsadenosti: každá živá príšera rezervuje bunku, v ktorej stojí, alebo do ktorej mieri (mclaim). occ[] = počet
+// rezervácií. Mení sa pri rozhodnutí, objavení a smrti (meranie 2026-11-16: prechádzanie všetkých príšer pre každý
+// kandidátsky smer robilo špičky).
+var occ: byte[66] = new byte[66]
+var mclaim: byte[6] = [255, 255, 255, 255, 255, 255]
+
+function claimCell(i: byte, c: byte): void {
+    var o: byte = mclaim[i]
+    if (o != 255) { occ[o] = occ[o] - 1 }
+    mclaim[i] = c
+    if (c != 255) { occ[c] = occ[c] + 1 }
+}
+
+// Je bunka (nx, ny) obsadená inou príšerou? (vlastná rezervácia je vždy bunka, z ktorej sa rozhoduje)
+inline function occupied(self: byte, nx: byte, ny: byte): bool {
+    return occ[ny * MZ_W + nx] != 0
 }
 
 // AI v strede bunky: z voľných smerov (bez otočenia späť a bez obsadených buniek, ak je iná možnosť) najbližší
@@ -232,6 +262,7 @@ function spawnMonster(i: byte, typ: byte): void {
     mcool[i] = 75
     mcloak[i] = 150 + (rand8() & 63)
     mshow[i] = 0
+    claimCell(i, mcy[i] * MZ_W + mcx[i])
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +399,12 @@ function moveMonster(i: byte): void {
         mdir[i] = d
         if (d == 0) { return }
         mface[i] = d
+        var tc: byte = mcy[i] * MZ_W + mcx[i]   // rezervácia cieľovej bunky
+        if (d == D_UP) { tc = tc - MZ_W }
+        if (d == D_DOWN) { tc = tc + MZ_W }
+        if (d == D_LEFT) { tc = tc - 1 }
+        if (d == D_RIGHT) { tc = tc + 1 }
+        claimCell(i, tc)
     }
     moff[i] = moff[i] + 1
     mstep[i] = mstep[i] + 1
@@ -404,7 +441,7 @@ function monVisible(i: byte): bool {
     return absDiff(mcx[i], pcx[p]) + absDiff(mcy[i], pcy[p]) < 3
 }
 
-function monShape(i: byte): byte {
+inline function monShape(i: byte): byte {              // inline: volá sa pre každý sprite každý snímok
     var f: byte = 0
     var d: byte = mface[i]
     if (d == D_LEFT) { f = 2 }
@@ -433,6 +470,7 @@ var mboom: byte[6] = [0, 0, 0, 0, 0, 0]  // > 0 = výbuch (odpočet snímok)
 var mresp: byte[6] = [0, 0, 0, 0, 0, 0]  // > 0 = čaká na návrat
 
 function killMonster(i: byte): void {
+    claimCell(i, 255)
     mtype[i] = M_NONE
     mboom[i] = BOOM_TIME
     mresp[i] = RESPAWN_TIME
@@ -464,7 +502,7 @@ function updateMonster(i: byte): void {
 }
 
 // Tvar spritu príšery: živá a viditeľná → animácia, výbuch → snímky výbuchu, inak 0 = skrytá.
-function monSprite(i: byte): byte {
+inline function monSprite(i: byte): byte {
     if (mtype[i] != M_NONE) {
         if (monVisible(i)) { return monShape(i) }
         return 0
@@ -481,6 +519,8 @@ function monSprite(i: byte): byte {
 
 // Príšery podlažia podľa LV_TYPES.
 function spawnLevel(lv: byte): void {
+    for c = 0 to 65 { occ[c] = 0 }
+    for j = 0 to MAX_MON - 1 { mclaim[j] = 255 }
     var b: byte = lv * MAX_MON
     for i = 0 to MAX_MON - 1 {
         spawnMonster(i, LV_TYPES[b + i])

@@ -128,7 +128,7 @@ var sprY: byte[12] = new byte[12]
 var sprS: byte[12] = new byte[12]
 var sprC: byte[12] = new byte[12]
 
-function putSprite(n: byte, x: byte, y: byte, col: byte, shape: byte): void {
+inline function putSprite(n: byte, x: byte, y: byte, col: byte, shape: byte): void {   // inline: 12× za snímok
     if (shape == 0) {
         if (sprS[n] != 0) { Mux2.hide(n)  sprS[n] = 0 }
         return
@@ -221,6 +221,7 @@ function newGame(): void {
     pfirePrev[0] = 1                       // fire držaný z obrazovky QUEST OVER nevyvedie hneď z brány
     spawnLevel(level)
     distKey[4] = 255                       // nové podlažie: mapu vzdialeností prepočítať
+    computeDist()                          // a hneď celú (tiene nesmú ísť podľa mapy starého podlažia)
     initRadar()
     enterGate(0)
     updateMonPos()                         // polohy spritov z novej hry hneď (review č. 4)
@@ -275,10 +276,8 @@ function main(): void {
             updateTunnels()
             mark(1)
             decBudget = 2
-            if (distChanged()) {                                 // mapa vzdialeností len pri zmene hráčov
-                computeDist()
-                decBudget = 1
-            }
+            if (distChanged()) { bfsStart()  decBudget = 1 }    // mapa vzdialeností len pri zmene hráčov,
+            else { if (bfsBusy) { bfsStep()  decBudget = 1 } }  // počítaná po častiach (BFS_STEP buniek za snímok)
             for i = 0 to MAX_MON - 1 { updateMonster(i) }
             updateMonPos()
             mark(2)

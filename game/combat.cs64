@@ -6,39 +6,72 @@ const HIT_ARROW: byte = 10               // šíp zasiahne príšeru, keď |dx| 
 const HIT_BODY: byte = 14                // príšera zasiahne hráča, keď |dx| < 14 a |dy| < 14
 const HIT_SHOT: byte = 8                 // strela kostlivca zasiahne hráča
 
+// Absolútny rozdiel bajtov cez pretečenie: |a - b| pre vzdialenosti < 128 (pixely bludiska sú najviac 252 od seba,
+// ale zásahy sa testujú len na malé vzdialenosti, takže stačí). Vnorené if namiesto reťazí && – tie prekladač
+// vyhodnocuje 16-bitovo cez dočasné bunky (meranie 2026-11-16: zásahy pre 2 hráčov ~46 rastrov).
+inline function near(a: byte, b: byte, lim: byte): bool {
+    var d: byte = a - b
+    if (d >= 128) { d = 0 - d }
+    return d < lim
+}
+
 function collide(): void {
     for p = 0 to 1 {
-        var alive: bool = pstate[p] == PS_ALIVE && pinv[p] == 0
+        var alive: bool = false
+        if (pstate[p] == PS_ALIVE) { if (pinv[p] == 0) { alive = true } }
+        var ppx: byte = px[p]
+        var ppy: byte = py[p]
         for i = 0 to MAX_MON - 1 {
             if (mtype[i] != M_NONE) {
                 var mx: byte = mxp[i]               // updateMonPos (raz za snímok)
                 var my: byte = myp[i]
-                if (aon[p] != 0 && absDiff(ax[p], mx) < HIT_ARROW && absDiff(ay[p], my) < HIT_ARROW) {
-                    aon[p] = 0
-                    addScore(p, 3, T_POINTS[mkind[i]])   // 100 / 200 / 500 bodov (číslica stoviek)
-                    killMonster(i)
-                } else {
-                    if (alive && absDiff(px[p], mx) < HIT_BODY && absDiff(py[p], my) < HIT_BODY) {
-                        killPlayer(p)
-                        alive = false
+                var hit: bool = false
+                if (aon[p] != 0) {
+                    if (near(ax[p], mx, HIT_ARROW)) {
+                        if (near(ay[p], my, HIT_ARROW)) {
+                            hit = true
+                            aon[p] = 0
+                            addScore(p, 3, T_POINTS[mkind[i]])   // 100 / 200 / 500 bodov (číslica stoviek)
+                            killMonster(i)
+                        }
+                    }
+                }
+                if (!hit && alive) {
+                    if (near(ppx, mx, HIT_BODY)) {
+                        if (near(ppy, my, HIT_BODY)) {
+                            killPlayer(p)
+                            alive = false
+                        }
                     }
                 }
             }
         }
         // šíp hráča p × druhý hráč: zasiahnutý stratí život, strelec +1000
         var q: byte = 1 - p
-        if (aon[p] != 0 && pstate[q] == PS_ALIVE && pinv[q] == 0 &&
-            absDiff(ax[p], px[q]) < HIT_ARROW && absDiff(ay[p], py[q]) < HIT_ARROW) {
-            aon[p] = 0
-            killPlayer(q)
-            addScore(p, 2, 1)                // číslica tisícov
+        if (aon[p] != 0) {
+            if (pstate[q] == PS_ALIVE) {
+                if (pinv[q] == 0) {
+                    if (near(ax[p], px[q], HIT_ARROW)) {
+                        if (near(ay[p], py[q], HIT_ARROW)) {
+                            aon[p] = 0
+                            killPlayer(q)
+                            addScore(p, 2, 1)        // číslica tisícov
+                        }
+                    }
+                }
+            }
         }
         // strely kostlivcov × hráč
-        for k = 0 to MAX_SHOT - 1 {
-            if (son[k] != 0 && alive && absDiff(sx[k], px[p]) < HIT_SHOT && absDiff(sy[k], py[p]) < HIT_SHOT) {
-                son[k] = 0
-                killPlayer(p)
-                alive = false
+        if (alive) {
+            for k = 0 to MAX_SHOT - 1 {
+                if (son[k] != 0) {
+                    if (near(sx[k], ppx, HIT_SHOT)) {
+                        if (near(sy[k], ppy, HIT_SHOT)) {
+                            son[k] = 0
+                            killPlayer(p)
+                        }
+                    }
+                }
             }
         }
     }
