@@ -517,6 +517,17 @@ zásahy 26–46, radar ~16, sprity ~80, <code>Mux2.update</code> (12 spritov) ~4
 <p>Ďalšie možnosti: logika príšer striedavo (polovica príšer v párnom, polovica v nepárnom snímku, dvojnásobný krok),
 zlepšenie prekladača C#64 (16-bitové porovnania s konštantou a bajtové podmienky – zistenia č. 3, 8, 9).</p>
 
+<h3>Zlepšenie prekladača C#64 (2026-11-16, C64U-Code vetva <code>261116-byte-compare</code>)</h3>
+<ul>
+<li>Porovnanie a <code>&amp;&amp;</code>/<code>||</code> použité ako <b>hodnota</b> (return, priradenie do <code>bool</code>, argument) sa
+prekladá skokmi a 0/1 až na konci, namiesto 16-bitového vyhodnotenia operandov a medzivýsledkov (zistenie č. 3).</li>
+<li>Unsigned <code>uint16</code> porovnanie s 255/256 = test horného bajtu (9. bit X spritu v <code>std:mux2</code>).</li>
+<li>Dungeon War bez zmeny zdroja: kód −1,6 KB (<code>$55B1</code> → <code>$4F23</code>, 58 miest); s dvoma hráčmi v bludisku
+oneskorené snímky ~12–15 % → <b>~5 %</b> (3/60), sprity nevypadávajú; typický snímok končí okolo rastra 298 z 312.</li>
+<li>C64U-Code: celá sada testov prechádza (2727), nové testy <code>FusedBoolValueTests.cs</code>, dokumentácia
+<code>docs/byte-codegen.html</code> kap. 13.</li>
+</ul>
+
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
 <ul><li><code>player.cs64</code>: stojaci hráč čelom k stene + joystick do protismeru → len otočenie (<code>pturn</code>,
 10 snímok); pohyb pri ďalšom stlačení alebo dlhšom držaní. Overené: v bunke (4,0) otočenie doprava → doľava bez
@@ -535,7 +546,7 @@ test <code>Mux2_SetScreen_MovesSpritePointersToOtherScreen</code>, dokumentácia
 <tr><td>2</td><td>Lokálne premenné a parametre funkcií, ktoré DFE vyhodí, stále zaberajú RAM (pridanie nepoužitej
 <code>setScreen</code> posunulo globály <code>mux2-demo</code> o 4 B).</td><td>námet</td></tr>
 <tr><td>3</td><td>Porovnania bajtov v podmienkach typu <code>a &amp;&amp; (b &amp; 2) == 0</code> sa prekladajú 16-bitovo cez
-<code>acc</code> a dočasné bunky (desiatky inštrukcií na jedno porovnanie) – <code>canGo</code> má stovky bajtov.</td><td>námet</td></tr>
+<code>acc</code> a dočasné bunky (desiatky inštrukcií na jedno porovnanie) – <code>canGo</code> má stovky bajtov.</td><td><b>Riešené</b> v prekladači (kap. „Zlepšenie prekladača“): bool hodnoty porovnaní a &amp;&amp;/|| skokmi.</td></tr>
 <tr><td>4</td><td><code>x % 24</code> a <code>x / 24</code> pre <code>byte</code> volajú 16-bitové <code>rt_DivMod16</code>
 (16 iterácií); bajtová verzia by bola ~2× rýchlejšia, pri konštante deliteľa ešte viac.</td><td>námet</td></tr>
 <tr><td>5</td><td><code>for … in</code> nejde cez poľový parameter; konštantné pole sa dá odovzdať len do
