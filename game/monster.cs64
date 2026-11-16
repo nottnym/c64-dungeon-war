@@ -9,21 +9,26 @@ const M_NONE: byte = 0
 const M_SLIME: byte = 1
 const M_SKEL: byte = 2
 const M_SHADE: byte = 3
+const M_THIEF: byte = 4                 // zlodej pokladu (krok 7)
 
 // vlastnosti podľa typu (index = typ)
-const T_SPEED:  byte[] = [0, 128, 160, 224]     // pixely za snímok × 256
-const T_SPRITE: byte[] = [0, 136, 144, 152]     // slizák 8–15, kostlivec 16–23, tieň 24–31 (128 + číslo)
-const T_COLOR:  byte[] = [0, 13, 15, 4]         // svetlozelená, svetlosivá, fialová
-const T_POINTS: byte[] = [0, 1, 2, 5]           // stovky bodov
-const T_RADAR:  byte[] = [0, 5, 1, 4]           // farba bodky na radare (hires znak → < 8)
+const T_SPEED:  byte[] = [0, 128, 160, 224, 255]     // pixely za snímok × 256
+const T_SPRITE: byte[] = [0, 136, 144, 152, 160]     // slizák 8–15, kostlivec 16–23, tieň 24–31, zlodej 32–33
+const T_COLOR:  byte[] = [0, 13, 15, 4, 7]           // svetlozelená, svetlosivá, fialová, žltá
+const T_POINTS: byte[] = [0, 1, 2, 5, 10]            // stovky bodov (zlodej 1000)
+const T_RADAR:  byte[] = [0, 5, 1, 4, 7]             // farba bodky na radare (hires znak → < 8)
+
+// Rýchlosť typu + zrýchlenie podlažia (floor.cs64), najviac 255; zlodej vždy najrýchlejší.
+function speedOf(t: byte): byte {
+    if (t == M_THIEF) { return 255 }
+    var s: byte = T_SPEED[t]
+    var b: byte = speedBonus
+    if (b > 255 - s) { return 255 }
+    return s + b
+}
 const COL_SLIME: byte = 13
 
 // zloženie podlaží (4 × 6 príšer) – krok 7 doplní zásobu a ďalšie podlažia
-const LV_TYPES: byte[] = [
-    1, 1, 1, 1, 1, 1,
-    1, 1, 2, 1, 1, 2,
-    1, 2, 2, 1, 3, 1,
-    1, 2, 3, 2, 3, 1]
 
 var mtype: byte[6] = [0, 0, 0, 0, 0, 0]  // živý typ (0 = mŕtva)
 var mkind: byte[6] = [0, 0, 0, 0, 0, 0]  // typ, ktorý sa vráti po smrti
@@ -193,6 +198,13 @@ function chooseDir(i: byte): byte {
     var tx: byte = 0
     var ty: byte = 0
     if (tp != 255) { tx = pcx[tp]  ty = pcy[tp] }
+    var thief: bool = mkind[i] == M_THIEF
+    if (thief) {                                 // zlodej: k bližšiemu tunelu, nikdy sa netúla
+        tp = 0
+        tx = 0
+        if (cx >= 5) { tx = MZ_W - 1 }
+        ty = TUN_ROW
+    }
     var shade: bool = mkind[i] == M_SHADE
     var best: byte = 0
     var bestDist: byte = 255
@@ -233,6 +245,7 @@ function chooseDir(i: byte): byte {
     var wander: bool = tp == 255
     var r: byte = 64
     if (shade) { r = 16 }
+    if (thief) { r = 24 }
     if (n > 1 && (wander || rand8() < r)) {
         var k: byte = rand8() & 3
         d = 1
@@ -258,7 +271,7 @@ function spawnMonster(i: byte, typ: byte): void {
     mface[i] = D_DOWN
     macc[i] = 0
     mstep[i] = 0
-    mspd[i] = T_SPEED[typ]
+    mspd[i] = speedOf(typ)
     mcool[i] = 75
     mcloak[i] = 150 + (rand8() & 63)
     mshow[i] = 0
@@ -380,6 +393,13 @@ function moveMonster(i: byte): void {
         }
     }
     if (moff[i] == 0 && decBudget == 0) { return }      // rozhodnutie až v ďalšom snímku
+    if (moff[i] == 0 && mkind[i] == M_THIEF && mcy[i] == TUN_ROW && (mcx[i] == 0 || mcx[i] == MZ_W - 1)) {
+        claimCell(i, 255)                        // zlodej utiekol tunelom
+        mtype[i] = M_NONE
+        mkind[i] = M_NONE
+        thiefState = THIEF_DONE
+        return
+    }
     var a: byte = macc[i] + mspd[i]
     var whole: bool = a < macc[i]                // prenos = celý pixel ("step" je kľúčové slovo)
     macc[i] = a
@@ -435,6 +455,7 @@ function monY(i: byte): byte {
 // Tieň je vidieť len pri zablysnutí alebo bližšie ako 3 bunky od hráča; ostatné príšery vždy.
 function monVisible(i: byte): bool {
     if (mkind[i] != M_SHADE) { return true }
+    if (torchTicks != 0) { return true }         // fakľa odhalí tiene
     if (mshow[i] != 0) { return true }
     var p: byte = nearestPlayer(mcx[i], mcy[i])
     if (p == 255) { return false }
@@ -442,6 +463,7 @@ function monVisible(i: byte): bool {
 }
 
 inline function monShape(i: byte): byte {              // inline: volá sa pre každý sprite každý snímok
+    if (mkind[i] == M_THIEF) { return T_SPRITE[M_THIEF] + ((mstep[i] >> 3) & 1) }
     var f: byte = 0
     var d: byte = mface[i]
     if (d == D_LEFT) { f = 2 }
@@ -469,11 +491,19 @@ const RESPAWN_TIME: byte = 150           // 3 s
 var mboom: byte[6] = [0, 0, 0, 0, 0, 0]  // > 0 = výbuch (odpočet snímok)
 var mresp: byte[6] = [0, 0, 0, 0, 0, 0]  // > 0 = čaká na návrat
 
+// Zabitá príšera vybuchne; jej miesto zaberie ďalšia zo zásoby podlažia (inak ostane prázdne). Zlodej sa nevracia.
 function killMonster(i: byte): void {
     claimCell(i, 255)
-    mtype[i] = M_NONE
     mboom[i] = BOOM_TIME
-    mresp[i] = RESPAWN_TIME
+    mresp[i] = 0
+    if (mkind[i] == M_THIEF) {
+        thiefState = THIEF_DONE
+        doubleNext = true                        // ďalšie podlažie dvojnásobné body
+    } else {
+        var nk: byte = nextReserve()
+        if (nk != M_NONE) { mkind[i] = nk  mresp[i] = RESPAWN_TIME }
+    }
+    mtype[i] = M_NONE
 }
 
 const BLINK_TIME: byte = 50              // posledná 1 s pred návratom príšera bliká na mieste objavenia
@@ -518,15 +548,20 @@ inline function monSprite(i: byte): byte {
 }
 
 // Príšery podlažia podľa LV_TYPES.
-function spawnLevel(lv: byte): void {
+// Príšery podlažia (fInit z floor.cs64); v pokladnici žiadne.
+function spawnFloor(): void {
     for c = 0 to 65 { occ[c] = 0 }
     for j = 0 to MAX_MON - 1 { mclaim[j] = 255 }
-    var b: byte = lv * MAX_MON
     for i = 0 to MAX_MON - 1 {
-        spawnMonster(i, LV_TYPES[b + i])
         mboom[i] = 0
         mresp[i] = 0
+        if (isBonus) { mtype[i] = M_NONE  mkind[i] = M_NONE } else { spawnMonster(i, fInit[i]) }
     }
     son[0] = 0
     son[1] = 0
+}
+
+// Zlodej pokladu po vyčistení podlažia: objaví sa na mieste objavenia 0 a uteká k bližšiemu tunelu.
+function spawnThief(): void {
+    spawnMonster(0, M_THIEF)
 }

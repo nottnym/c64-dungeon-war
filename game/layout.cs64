@@ -14,4 +14,4 @@ const A_CODE_TOP: uint16 = $8400  // kód musí skončiť pod obrazovkou
 diskFile "DW LEVELS" at $9000 {
     const A_LEVELS = place("assets/levels")      // podlažia po 66 B (make_levels.py)
 }
-const N_LEVELS: byte = 4
+const N_LEVELS: byte = 12

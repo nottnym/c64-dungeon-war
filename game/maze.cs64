@@ -24,16 +24,30 @@ const COL_GATE: byte = 15            // multicolor + svetlosivá
 
 // bunka: bit0 stena vpravo, bit1 stena dole, bit2 tunel vpravo, bit3 brána dole (make_levels.py)
 var cell: byte[66] = new byte[66]
-var level: byte = 0
+var wallColor: byte = COL_WALL         // farba stien pri kreslení (temné podlažie: čierna)
 
 // riadky obrazovky × 40 (bez násobenia)
 const ROW_LO: byte[] = [0, 40, 80, 120, 160, 200, 240, 24, 64, 104, 144, 184, 224, 8, 48, 88, 128, 168, 208, 248, 32, 72, 112, 152, 192]
 const ROW_HI: byte[] = [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3]
 function rowAddr(r: byte): uint16 { return ROW_LO[r] | (ROW_HI[r] << 8) }
 
-function loadLevel(n: byte): void {
+// Podlažie n; mirror = zrkadlovo zľava doprava (podlažia 13–24, …). bfsQ slúži ako dočasný buffer.
+function loadLevel(n: byte, mirror: bool): void {
     var a: uint16 = A_LEVELS + (uint16)n * 66
     for i = 0 to 65 { cell[i] = peek(a + i) }
+    if (!mirror) { return }
+    for i = 0 to 65 { bfsQ[i] = cell[i] }
+    var b: byte = 0
+    for y = 0 to MZ_H - 1 {
+        for x = 0 to MZ_W - 1 {
+            var src: byte = b + MZ_W - 1 - x            // bunka (10 - x, y)
+            var v: byte = bfsQ[src] & 10                // stena dole a brána idú so zrkadlenou bunkou
+            if (x == MZ_W - 1) { v = v | 1 | (bfsQ[b + MZ_W - 1] & 4) }   // pravý okraj = pôvodný ľavý (+ tunel)
+            else { v = v | (bfsQ[src - 1] & 1) }        // stena vpravo = pôvodná stena vľavo od zdroja
+            cell[b + x] = v
+        }
+        b = b + MZ_W
+    }
 }
 
 // Steny bunky pre kreslenie: bit0 hore, bit1 dole, bit2 vľavo, bit3 vpravo (tunel a brána = otvor).
@@ -69,7 +83,7 @@ function drawCell(x: byte, y: byte): void {
         for c = 0 to 2 {
             var ch: byte = cellChar(w, c, r)
             poke(a + c, ch)
-            if (ch == C_FLOOR) { poke(ca + c, COL_FLOOR) } else { poke(ca + c, COL_WALL) }
+            if (ch == C_FLOOR) { poke(ca + c, COL_FLOOR) } else { poke(ca + c, wallColor) }
         }
     }
 }

@@ -9,9 +9,10 @@
 //    $C000-$CBFF  premenné C#64, halda $CC00-$CDFF
 //    $CE00-$CFFF  tabuľky std:mux2 (nič iné tam nesmie byť)
 //
+//  Krok 7: priebeh podlaží (floor.cs64) – zásoba príšer, zlodej, truhlice, fakle, temné podlažie, pokladnica.
 //  Krok 6: hráč 2 (joystick port 1, pripojí sa tlačidlom fire), vzájomné zásahy. Sprity: 0 hráč 1, 1-6 príšery, 7 šíp 1,
 //  8-9 strely príšer, 10 hráč 2, 11 šíp 2.
-//  Ladenie: zápis n (1–4) na $02FF cez monitor → nová hra na podlaží n.
+//  Ladenie: zápis n (1–24) na $02FF cez monitor → nová hra na podlaží n.
 // ============================================================================
 
 memoryLayout { vars = $C000  heap = $CC00  heapLimit = $CE00 }
@@ -25,6 +26,7 @@ uses "player.cs64"
 uses "monster.cs64"
 uses "hud.cs64"
 uses "combat.cs64"
+uses "floor.cs64"
 
 // Texty v hre sú po anglicky (rozhodnutie 2026-11-16).
 const T_P1:    byte[] = screenCodes("PLAYER 1 000000")
@@ -72,16 +74,21 @@ function drawStatus(): void {
     printAt(0, 0, T_P1, 5)
     printAt(0, 16, T_FLOOR, 1)
     printAt(0, 25, T_P2, 7)                // text: farba < 8 (≥ 8 = multicolor znak)
-    var n: byte = level + 1
+    var n: byte = floorNo
     poke(SCREEN + 22, 48 + n / 10)
     poke(SCREEN + 23, 48 + n % 10)
+    showScore(0)                           // texty vyššie majú „000000“ – skutočné skóre naspäť
+    showScore(1)
 }
 
-function showLevel(): void {
-    loadLevel(level)
-    computeOpen()                          // voľné smery buniek pre AI/BFS/šípy (monster.cs64)
-    drawMaze()
-    drawStatus()
+// Vymaže riadky obrazovky od..po (medzery, biela).
+function clearRows(r0: byte, r1: byte): void {
+    var r: byte = r0
+    while (r <= r1) {
+        var a: uint16 = SCREEN + rowAddr(r)
+        for c = 0 to 39 { poke(a + c, 32)  poke(a - SCREEN + COLRAM + c, 1) }
+        r = r + 1
+    }
 }
 
 const SPR_ARROW1: byte = 1 + MAX_MON     // logický sprite šípu hráča 1
@@ -89,6 +96,10 @@ const SPR_SHOT0: byte = 2 + MAX_MON      // strely príšer
 const SPR_P2: byte = 4 + MAX_MON
 const SPR_ARROW2: byte = 5 + MAX_MON
 const N_SPRITES: byte = 6 + MAX_MON
+const T_FLOOR_N:  byte[] = screenCodes("FLOOR")
+const T_TREASURY: byte[] = screenCodes("TREASURY")
+var hideAll: bool = false                // úvod podlažia: všetky sprity skryté
+const INTRO_TIME: byte = 100
 const T_JOIN:  byte[] = screenCodes("FIRE:JOIN")      // "=" vo vlastnom písme nie je
 const T_BLANK9: byte[] = screenCodes("         ")
 var p2Joined: bool = false
@@ -151,6 +162,10 @@ inline function putSprite(n: byte, x: byte, y: byte, col: byte, shape: byte): vo
 }
 
 function drawSprites(): void {
+    if (hideAll) {
+        for n = 0 to N_SPRITES - 1 { putSprite(n, 0, 0, 0, 0) }
+        return
+    }
     var sh: byte = 0
     if (pstate[0] != PS_OUT) { sh = playerSprite(0) }
     putSprite(0, px[0], py[0], COL_P1, sh)
@@ -201,31 +216,81 @@ function distChanged(): bool {
     return true
 }
 
-// Nová hra: podlažie, skóre, životy, príšery, hráč v bráne.
-function newGame(): void {
+// Nová hra od podlažia f: skóre, životy, hráč 2 čaká na pripojenie; potom úvod podlažia.
+function newGame(f: byte): void {
     clearScreen()
-    showLevel()
+    floorNo = f
+    isBonus = false
+    doubleNext = false
     resetScore(0)
     resetScore(1)
     plives[0] = 3
     showLives(0, 3)
-    aon[0] = 0
-    aon[1] = 0
+    pstate[0] = PS_GATE
     pstate[1] = PS_OUT                     // hráč 2 sa pripojí tlačidlom fire na joysticku 1
     plives[1] = 0
     p2Joined = false
     showLives(1, 0)
     printAt(1, 31, T_JOIN, 7)
-    tunShut = 0                            // code review č. 5 (drawMaze kreslí tunely otvorené)
-    pinv[0] = 0
     pfirePrev[0] = 1                       // fire držaný z obrazovky QUEST OVER nevyvedie hneď z brány
-    spawnLevel(level)
+    beginIntro()
+}
+
+// Úvod podlažia: „FLOOR nn“ alebo „TREASURY“, sprity skryté (INTRO_TIME snímok).
+var introTimer: byte = 0
+function beginIntro(): void {
+    clearRows(2, 24)
+    hideAll = true
+    introTimer = INTRO_TIME
+    if (isBonus) { printAt(11, 16, T_TREASURY, 7) }
+    else {
+        printAt(11, 16, T_FLOOR_N, 1)
+        poke(SCREEN + rowAddr(11) + 22, 48 + floorNo / 10)
+        poke(SCREEN + rowAddr(11) + 23, 48 + floorNo % 10)
+    }
+    drawStatus()
+}
+
+// Začiatok podlažia: bludisko, príšery, predmety, hráči v bránach.
+function startFloor(): void {
+    clearRows(2, 24)
+    hideAll = false
+    floorLayout()                          // rozloženie, zrkadlenie, temné podlažie (floor.cs64)
+    computeOpen()                          // voľné smery buniek pre AI/BFS/šípy (monster.cs64)
+    wallColor = COL_WALL
+    poke($D022, 11)                        // tmavosivá – škáry kameňa
+    if (isDark) { wallColor = COL_DARK  poke($D022, 0) }   // temné podlažie: steny čierne, odhalia sa okolo hráčov
+    drawMaze()
+    drawStatus()
+    if (!isBonus) { setupFloor(floorNo) }
+    spawnFloor()
+    clearItems()
+    thiefState = THIEF_NONE
+    speedBonus = 0
+    floorSecs = 0
+    secFrames = 0
+    doubleNow = doubleNext
+    doubleNext = false
+    litX[0] = 255
+    litX[1] = 255
+    tunShut = 0                            // code review č. 5 (drawMaze kreslí tunely otvorené)
+    aon[0] = 0
+    aon[1] = 0
+    for p = 0 to 1 {
+        if (pstate[p] == PS_DYING) {       // umieral pri konci podlažia → život sa odpočíta teraz
+            plives[p] = plives[p] - 1
+            showLives(p, plives[p])
+        }
+        pinv[p] = 0
+        if (plives[p] != 0) { enterGate(p) } else { pstate[p] = PS_OUT }
+    }
     distKey[4] = 255                       // nové podlažie: mapu vzdialeností prepočítať
     computeDist()                          // a hneď celú (tiene nesmú ísť podľa mapy starého podlažia)
     initRadar()
-    enterGate(0)
     updateMonPos()                         // polohy spritov z novej hry hneď (review č. 4)
+    if (isBonus) { startBonusItems() }
 }
+
 
 function main(): void {
     includeAt(A_CHARSET, "assets/charset")
@@ -237,9 +302,10 @@ function main(): void {
         while (true) { }
     }
     initVideo()
-    newGame()
+    newGame(1)
     initSprites()
     var over: bool = false
+    var intro: bool = true
     var firePrev: bool = true
     var frame: byte = 0
     poke(DEBUG_LEVEL, 0)
@@ -254,16 +320,20 @@ function main(): void {
         firePrev = fire
         frame = frame + 1
         var dbg: byte = peek(DEBUG_LEVEL)          // ladenie: nová hra na podlaží dbg
-        if (dbg != 0 && dbg <= N_LEVELS) {
+        if (dbg != 0 && dbg <= 24) {
             poke(DEBUG_LEVEL, 0)
-            level = dbg - 1
-            newGame()
+            newGame(dbg)
             over = false
+            intro = true
         }
-        if (over) {
+        if (intro) {
+            introTimer = introTimer - 1
+            if (introTimer == 0) { startFloor()  intro = false }
+        } else { if (over) {
             if (press) {
-                newGame()
+                newGame(1)
                 over = false
+                intro = true
             }
         } else {
             if (peek(DBG_REQ) != 0 && (frame & 7) != 0) { dbgOn = 1  poke(DBG_REQ, 0) }
@@ -285,7 +355,10 @@ function main(): void {
             collide()
             mark(3)
             updateRadar()
+            updateItems()
+            updateDark()
             mark(4)
+            if (updateFloor()) { advanceFloor()  beginIntro()  intro = true }   // podlažie vyčistené
             if (pstate[0] == PS_OUT && pstate[1] == PS_OUT) {   // koniec, až keď sú vonku všetci hráči
                 son[0] = 0                         // strely nezamrznú na obrazovke (review č. 4)
                 son[1] = 0
@@ -293,7 +366,7 @@ function main(): void {
                 printAt(13, 15, T_PRESS_FIRE, 1)
                 over = true
             }
-        }
+        } }
         drawSprites()
         mark(5)
         Mux2.update()                      // 3. commit – posledný zápis snímku

@@ -528,6 +528,23 @@ oneskorené snímky ~12–15 % → <b>~5 %</b> (3/60), sprity nevypadávajú; ty
 <code>docs/byte-codegen.html</code> kap. 13.</li>
 </ul>
 
+<h3>Krok 7 – priebeh podlaží (2026-11-16, zatiaľ neodskúšané v C64U Code)</h3>
+<ul>
+<li><code>floor.cs64</code>: zloženie podlaží a zásoba podľa kap. 5 (zabitá príšera sa vráti ako ďalšia zo zásoby, potom
+miesto ostane prázdne); podlažie vyčistené → zlodej pokladu (od 2. podlažia) → bonus 50 × číslo podlažia → úvod „FLOOR nn“.</li>
+<li>Zrýchľovanie: (podlažie − 1) × 6, každých 20 s +8 (najviac 5×), pri ≤ 2 príšerách +24 (<code>speedOf</code>).</li>
+<li>Zlodej pokladu (sprity 32/33, žltý, najrýchlejší): uteká k bližšiemu tunelu; zásah 1000 bodov a dvojnásobné body na
+ďalšom podlaží (<code>award</code>).</li>
+<li>Truhlica (300) a fakľa (100 + 8 s odhalené tiene, na temnom podlaží steny) – náhodne, zmiznú po ~10 s.</li>
+<li>Temné podlažie (4., 8., … okrem každého 5.): steny čierne (<code>$D022</code> = 0, farebná RAM 8), odhalené 3 × 3 bunky
+okolo hráčov, fakľa odhalí všetko.</li>
+<li>Pokladnica po 3., 7., 11. … podlaží: 6 truhlíc, 15 s, bez príšer; za všetky +1000.</li>
+<li>12 rozložení podlaží (8 nových: Chodby, Kríž, Komnaty, Had, Bludisko, Arena, Schody, Hlbiny), od 13. podlažia zrkadlovo
+(<code>loadLevel(n, mirror)</code>).</li>
+<li>Stavy hry v <code>main</code>: úvod podlažia / hra / koniec. Ladenie <code>$02FF</code> = 1–24.</li>
+<li>Koniec kódu <code>$654C</code> (cs64build s novým prekladačom).</li>
+</ul>
+
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
 <ul><li><code>player.cs64</code>: stojaci hráč čelom k stene + joystick do protismeru → len otočenie (<code>pturn</code>,
 10 snímok); pohyb pri ďalšom stlačení alebo dlhšom držaní. Overené: v bunke (4,0) otočenie doprava → doľava bez

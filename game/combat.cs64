@@ -31,7 +31,7 @@ function collide(): void {
                         if (near(ay[p], my, HIT_ARROW)) {
                             hit = true
                             aon[p] = 0
-                            addScore(p, 3, T_POINTS[mkind[i]])   // 100 / 200 / 500 bodov (číslica stoviek)
+                            award(p, 3, T_POINTS[mkind[i]])      // 100 / 200 / 500 / 1000 bodov (floor.cs64)
                             killMonster(i)
                         }
                     }

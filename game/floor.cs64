@@ -1,0 +1,339 @@
+// ============================================================================
+//  Dungeon War – priebeh podlaží (krok 7, dizajn kap. 5 a 6)
+//  Zásoba príšer, zrýchľovanie, zlodej pokladu, truhlice a fakle, temné podlažie, pokladnica, prechod na ďalšie.
+// ============================================================================
+
+var floorNo: byte = 1                    // číslo podlažia (1, 2, …); rozloženie = (floorNo - 1) mod 12, od 13. zrkadlovo
+var isBonus: bool = false                // pokladnica (medzi 3. a 4., 7. a 8., … podlažím)
+var isDark: bool = false                 // temné podlažie (4., 8., … okrem každého 5.)
+
+// --- zásoba príšer ---
+var fInit: byte[6] = new byte[6]         // príšery na začiatku podlažia (typy)
+var fRes: byte[8] = new byte[8]          // zásoba (typy v poradí návratu)
+var resN: byte = 0
+var resIdx: byte = 0
+
+// Zloženie podlažia podľa dizajnu (kap. 5): 1. – 6 slizákov + 2 kostlivci, 2.–3. – 4 slizáci a 2 kostlivci + 2 kostlivci
+// a tieň, 4. – 3 slizáci a 3 kostlivci + 3 tiene, ďalej viac kostlivcov a tieňov.
+function setupFloor(f: byte): void {
+    var s: byte = M_SLIME
+    var k: byte = M_SKEL
+    var h: byte = M_SHADE
+    if (f == 1) {
+        for i = 0 to 5 { fInit[i] = s }
+        fRes[0] = k  fRes[1] = k
+        resN = 2
+    } else { if (f <= 3) {
+        fInit[0] = s  fInit[1] = s  fInit[2] = k  fInit[3] = s  fInit[4] = s  fInit[5] = k
+        fRes[0] = k  fRes[1] = k  fRes[2] = h
+        resN = 3
+    } else { if (f == 4) {
+        fInit[0] = s  fInit[1] = k  fInit[2] = s  fInit[3] = k  fInit[4] = s  fInit[5] = k
+        fRes[0] = h  fRes[1] = h  fRes[2] = h
+        resN = 3
+    } else {
+        fInit[0] = s  fInit[1] = k  fInit[2] = h  fInit[3] = k  fInit[4] = s  fInit[5] = k
+        fRes[0] = h  fRes[1] = k  fRes[2] = h  fRes[3] = h
+        resN = 4
+        if (f >= 9) { fRes[4] = k  fRes[5] = h  resN = 6 }
+    } } }
+    resIdx = 0
+}
+
+// Ďalšia príšera zo zásoby (M_NONE = zásoba minutá).
+function nextReserve(): byte {
+    if (resIdx >= resN) { return M_NONE }
+    var t: byte = fRes[resIdx]
+    resIdx = resIdx + 1
+    return t
+}
+
+// --- body: na podlaží po zásahu zlodeja dvojnásobné ---
+var doubleNow: bool = false
+var doubleNext: bool = false
+
+function award(p: byte, pos: byte, v: byte): void {
+    addScore(p, pos, v)
+    if (doubleNow) { addScore(p, pos, v) }
+}
+
+// --- zrýchľovanie (kap. 5): podľa podlažia, každých 20 s, keď ostanú najviac 2 príšery ---
+var speedBonus: byte = 0
+var secFrames: byte = 0
+var floorSecs: byte = 0
+
+function aliveMonsters(): byte {
+    var n: byte = 0
+    for i = 0 to MAX_MON - 1 { if (mtype[i] != M_NONE && mkind[i] != M_THIEF) { n = n + 1 } }
+    return n
+}
+
+function updateSpeed(): void {
+    secFrames = secFrames + 1
+    if (secFrames < 50) { return }
+    secFrames = 0
+    if (floorSecs < 255) { floorSecs = floorSecs + 1 }
+    var b: byte = (floorNo - 1) * 6
+    if (floorNo > 11) { b = 60 }
+    var steps: byte = 0
+    var t: byte = floorSecs
+    while (t >= 20 && steps < 5) { t = t - 20  steps = steps + 1 }
+    b = b + steps * 8
+    if (aliveMonsters() <= 2) { b = b + 24 }
+    if (b != speedBonus) {
+        speedBonus = b
+        for i = 0 to MAX_MON - 1 { if (mtype[i] != M_NONE) { mspd[i] = speedOf(mkind[i]) } }
+    }
+}
+
+// --- zlodej pokladu ---
+const THIEF_NONE: byte = 0
+const THIEF_ACTIVE: byte = 1
+const THIEF_DONE: byte = 2
+var thiefState: byte = 0
+
+// --- truhlice a fakle (sloty 0 = truhlica, 1 = fakľa; v pokladnici 0–5 truhlice) ---
+const IT_NONE: byte = 0
+const IT_CHEST: byte = 1
+const IT_TORCH: byte = 2
+const MAX_ITEM: byte = 6
+const ITEM_LIFE: byte = 62               // ~10 s (jednotka 8 snímok)
+const TORCH_TICKS: byte = 50             // ~8 s
+const C_CHEST: byte = 144                // + 145 (pravá polovica)
+const C_TORCH: byte = 146
+const COL_ITEM: byte = 15                // multicolor + žltá
+var itType: byte[6] = new byte[6]
+var itCell: byte[6] = new byte[6]
+var itTime: byte[6] = new byte[6]
+var torchTicks: byte = 0
+var itemFrames: byte = 0
+
+function cellX(c: byte): byte {
+    var x: byte = c
+    while (x >= MZ_W) { x = x - MZ_W }
+    return x
+}
+
+function cellY(c: byte): byte {
+    var y: byte = 0
+    var x: byte = c
+    while (x >= MZ_W) { x = x - MZ_W  y = y + 1 }
+    return y
+}
+
+function drawItem(k: byte): void {
+    var c: byte = itCell[k]
+    var a: uint16 = SCREEN + rowAddr(MZ_Y + cellY(c) * 3 + 1) + MZ_X + cellX(c) * 3 + 1
+    var ca: uint16 = a - SCREEN + COLRAM
+    if (itType[k] == IT_TORCH) { poke(a, C_TORCH)  poke(ca, COL_ITEM) }
+    else { poke(a, C_CHEST)  poke(a + 1, C_CHEST + 1)  poke(ca, COL_ITEM)  poke(ca + 1, COL_ITEM) }
+}
+
+function removeItem(k: byte): void {
+    var c: byte = itCell[k]
+    itType[k] = IT_NONE
+    drawCell(cellX(c), cellY(c))
+    if (isDark) { relightDark() }
+}
+
+// Náhodná voľná bunka pre predmet (truhlica potrebuje bunku bez steny vpravo – kreslí sa na 2 znaky). 255 = nenašla.
+function randomCell(chest: bool): byte {
+    for t = 0 to 7 {
+        var c: byte = rand8()
+        while (c >= 66) { c = c - 66 }
+        var ok: bool = true
+        if (chest) { if ((cell[c] & 1) != 0 || cellX(c) == MZ_W - 1) { ok = false } }
+        for k = 0 to MAX_ITEM - 1 { if (itType[k] != IT_NONE && itCell[k] == c) { ok = false } }
+        for p = 0 to 1 { if (pstate[p] == PS_ALIVE && pcy[p] * MZ_W + pcx[p] == c) { ok = false } }
+        if (ok) { return c }
+    }
+    return 255
+}
+
+function placeItem(k: byte, typ: byte, life: byte): void {
+    var c: byte = randomCell(typ == IT_CHEST)
+    if (c == 255) { return }
+    itType[k] = typ
+    itCell[k] = c
+    itTime[k] = life
+    drawItem(k)
+}
+
+function clearItems(): void {
+    for k = 0 to MAX_ITEM - 1 { itType[k] = IT_NONE }
+    torchTicks = 0
+}
+
+// Raz za snímok: objavenie, zánik a zobratie predmetov (hráč v strede bunky predmetu).
+function updateItems(): void {
+    for p = 0 to 1 {
+        if (pstate[p] == PS_ALIVE) {
+            var pc: byte = pcy[p] * MZ_W + pcx[p]
+            for k = 0 to MAX_ITEM - 1 {
+                if (itType[k] != IT_NONE && itCell[k] == pc) {
+                    if (itType[k] == IT_CHEST) { award(p, 3, 3) }           // 300 bodov
+                    else {
+                        award(p, 3, 1)                                      // 100 bodov
+                        torchTicks = TORCH_TICKS
+                        if (isDark) { litAll() }
+                    }
+                    removeItem(k)
+                }
+            }
+        }
+    }
+    itemFrames = itemFrames + 1
+    if ((itemFrames & 7) != 0) { return }
+    if (torchTicks != 0) {
+        torchTicks = torchTicks - 1
+        if (torchTicks == 0 && isDark) { darkAll() }
+    }
+    if (isBonus) { return }                                             // v pokladnici truhlice nemiznú
+    for k = 0 to 1 {
+        if (itType[k] != IT_NONE) {
+            itTime[k] = itTime[k] - 1
+            if (itTime[k] == 0) { removeItem(k) }
+        }
+    }
+    if (itType[0] == IT_NONE && rand8() < 6) { placeItem(0, IT_CHEST, ITEM_LIFE) }
+    if (itType[1] == IT_NONE && rand8() < 3) { placeItem(1, IT_TORCH, ITEM_LIFE) }
+}
+
+// --- temné podlažie: steny vidieť len okolo hráčov (3 × 3 bunky) a pri fakli ---
+const COL_DARK: byte = 8                 // multicolor + čierna
+var litX: byte[2] = [255, 255]
+var litY: byte[2] = [255, 255]
+
+function colorCell(x: byte, y: byte, col: byte): void {
+    var a: uint16 = COLRAM + rowAddr(MZ_Y + y * 3) + MZ_X + x * 3
+    for r = 0 to 2 {
+        poke(a, col)  poke(a + 1, col)  poke(a + 2, col)
+        a = a + 40
+    }
+}
+
+function colorArea(cx: byte, cy: byte, col: byte): void {
+    if (cx == 255) { return }
+    var y0: byte = cy
+    if (y0 > 0) { y0 = y0 - 1 }
+    var x0: byte = cx
+    if (x0 > 0) { x0 = x0 - 1 }
+    var y: byte = y0
+    while (y <= cy + 1 && y < MZ_H) {
+        var x: byte = x0
+        while (x <= cx + 1 && x < MZ_W) { colorCell(x, y, col)  x = x + 1 }
+        y = y + 1
+    }
+}
+
+function darkAll(): void {
+    for y = 0 to MZ_H - 1 { for x = 0 to MZ_W - 1 { colorCell(x, y, COL_DARK) } }
+    for p = 0 to 1 { litX[p] = 255 }
+}
+
+function litAll(): void {
+    for y = 0 to MZ_H - 1 { for x = 0 to MZ_W - 1 { colorCell(x, y, COL_WALL) } }
+    for k = 0 to MAX_ITEM - 1 { if (itType[k] != IT_NONE) { drawItem(k) } }   // predmety späť vo svojej farbe
+}
+
+function relightDark(): void {
+    if (torchTicks != 0) { return }
+    for p = 0 to 1 { colorArea(litX[p], litY[p], COL_WALL) }
+    for k = 0 to MAX_ITEM - 1 { if (itType[k] != IT_NONE) { drawItem(k) } }
+}
+
+function updateDark(): void {
+    if (!isDark || torchTicks != 0) { return }
+    var changed: bool = false
+    for p = 0 to 1 {
+        var nx: byte = 255
+        var ny: byte = 255
+        if (pstate[p] == PS_ALIVE) { nx = pcx[p]  ny = pcy[p] }
+        if (nx != litX[p] || ny != litY[p]) {
+            colorArea(litX[p], litY[p], COL_DARK)
+            litX[p] = nx
+            litY[p] = ny
+            changed = true
+        }
+    }
+    if (changed) { relightDark() }
+}
+
+// --- pokladnica ---
+const BONUS_TICKS: byte = 94             // ~15 s (jednotka 8 snímok)
+var bonusTicks: byte = 0
+var bonusFrames: byte = 0
+
+function startBonusItems(): void {
+    for k = 0 to MAX_ITEM - 1 { placeItem(k, IT_CHEST, 255) }
+    bonusTicks = BONUS_TICKS
+    bonusFrames = 0
+}
+
+// Vracia true, keď pokladnica skončila (všetky truhlice zobraté → +1000 živým hráčom, alebo čas vypršal).
+function updateBonus(): bool {
+    var left: byte = 0
+    for k = 0 to MAX_ITEM - 1 { if (itType[k] != IT_NONE) { left = left + 1 } }
+    if (left == 0) {
+        for p = 0 to 1 { if (pstate[p] == PS_ALIVE) { addScore(p, 2, 1) } }
+        return true
+    }
+    bonusFrames = bonusFrames + 1
+    if ((bonusFrames & 7) == 0) {
+        bonusTicks = bonusTicks - 1
+        if (bonusTicks == 0) { return true }
+    }
+    return false
+}
+
+// --- koniec podlažia ---
+// Podlažie je vyčistené: zásoba minutá, žiadna príšera nežije ani nevybuchuje, žiadna nečaká na návrat.
+function floorCleared(): bool {
+    if (resIdx < resN) { return false }
+    for i = 0 to MAX_MON - 1 {
+        if (mtype[i] != M_NONE || mboom[i] != 0 || mresp[i] != 0) { return false }
+    }
+    return true
+}
+
+// Raz za snímok počas hry. Vracia true, keď sa má prejsť na ďalšie podlažie.
+function updateFloor(): bool {
+    if (isBonus) { return updateBonus() }
+    updateSpeed()
+    if (!floorCleared()) { return false }
+    if (thiefState == THIEF_NONE && floorNo >= 2) {
+        spawnThief()
+        thiefState = THIEF_ACTIVE
+        return false
+    }
+    if (thiefState == THIEF_ACTIVE) { return false }
+    // bonus za podlažie: 50 × číslo podlažia (desiatky) hráčom v hre
+    for p = 0 to 1 {
+        if (pstate[p] != PS_OUT) {
+            for n = 1 to floorNo { addScore(p, 4, 5) }
+        }
+    }
+    return true
+}
+
+// Číslo ďalšieho podlažia / pokladnica po 3., 7., 11. …
+function advanceFloor(): void {
+    if (!isBonus && (floorNo & 3) == 3) { isBonus = true  return }
+    isBonus = false
+    if (floorNo < 99) { floorNo = floorNo + 1 }
+}
+
+// Rozloženie a zrkadlenie pre aktuálne podlažie; temné podlažie.
+function floorLayout(): void {
+    var n: byte = floorNo - 1
+    var block: byte = 0
+    while (n >= N_LEVELS) { n = n - N_LEVELS  block = block + 1 }
+    loadLevel(n, (block & 1) != 0)
+    isDark = false
+    if (!isBonus && (floorNo & 3) == 0) {
+        isDark = true
+        var t: byte = floorNo
+        while (t >= 5) { t = t - 5 }
+        if (t == 0) { isDark = false }                  // každé 5. podlažie je strážca hĺbky (krok 8)
+    }
+}
