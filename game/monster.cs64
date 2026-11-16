@@ -561,7 +561,11 @@ function spawnFloor(): void {
     son[1] = 0
 }
 
-// Zlodej pokladu po vyčistení podlažia: objaví sa na mieste objavenia 0 a uteká k bližšiemu tunelu.
+// Zlodej pokladu po vyčistení podlažia: objaví sa v strede bludiska (5,3), najďalej od tunelov, a uteká k bližšiemu.
+// (Test 2026-11-16: z miesta objavenia 0 pri ľavom tuneli utiekol za ~0,7 s.)
 function spawnThief(): void {
     spawnMonster(0, M_THIEF)
+    mcx[0] = 5
+    mcy[0] = 3
+    claimCell(0, 3 * MZ_W + 5)
 }

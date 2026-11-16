@@ -36,7 +36,7 @@ function collide(): void {
                         }
                     }
                 }
-                if (!hit && alive) {
+                if (!hit && alive && mkind[i] != M_THIEF) {   // zlodej je bonusový cieľ – dotykom nezabíja
                     if (near(ppx, mx, HIT_BODY)) {
                         if (near(ppy, my, HIT_BODY)) {
                             killPlayer(p)

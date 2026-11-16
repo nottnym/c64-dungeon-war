@@ -259,7 +259,12 @@ function startFloor(): void {
     computeOpen()                          // voľné smery buniek pre AI/BFS/šípy (monster.cs64)
     wallColor = COL_WALL
     poke($D022, 11)                        // tmavosivá – škáry kameňa
-    if (isDark) { wallColor = COL_DARK  poke($D022, 0) }   // temné podlažie: steny čierne, odhalia sa okolo hráčov
+    poke($D023, 9)                         // hnedá – dlažba
+    if (isDark) {                          // temné podlažie: steny aj dlažba čierne, steny sa odhalia okolo hráčov
+        wallColor = COL_DARK
+        poke($D022, 0)
+        poke($D023, 0)                     // (test 2026-11-16: bodky dlažby prezrádzali tvar bludiska)
+    }
     drawMaze()
     drawStatus()
     if (!isBonus) { setupFloor(floorNo) }

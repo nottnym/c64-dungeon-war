@@ -528,7 +528,7 @@ oneskorené snímky ~12–15 % → <b>~5 %</b> (3/60), sprity nevypadávajú; ty
 <code>docs/byte-codegen.html</code> kap. 13.</li>
 </ul>
 
-<h3>Krok 7 – priebeh podlaží (2026-11-16, zatiaľ neodskúšané v C64U Code)</h3>
+<h3>Krok 7 – priebeh podlaží (2026-11-16, odskúšané v C64U Code)</h3>
 <ul>
 <li><code>floor.cs64</code>: zloženie podlaží a zásoba podľa kap. 5 (zabitá príšera sa vráti ako ďalšia zo zásoby, potom
 miesto ostane prázdne); podlažie vyčistené → zlodej pokladu (od 2. podlažia) → bonus 50 × číslo podlažia → úvod „FLOOR nn“.</li>
@@ -543,6 +543,11 @@ okolo hráčov, fakľa odhalí všetko.</li>
 (<code>loadLevel(n, mirror)</code>).</li>
 <li>Stavy hry v <code>main</code>: úvod podlažia / hra / koniec. Ladenie <code>$02FF</code> = 1–24.</li>
 <li>Koniec kódu <code>$654C</code> (cs64build s novým prekladačom).</li>
+<li>Test v C64U Code (2026-11-16, nový prekladač): úvod „FLOOR nn“, zásoba (2. podlažie: 3 príšery navyše), prechod
+1→2→3→4, pokladnica po 3. podlaží (6 truhlíc, ~15 s), temné 4. podlažie, zrkadlové 13. podlažie, najdlhšia snímka na
+temnom podlaží 288 z 312 riadkov. Opravy po teste: zlodej sa objaví v strede bludiska (5,3) – z miesta pri tuneli utiekol
+za ~0,7 s, teraz ~4 s; zlodej dotykom nezabíja (bonusový cieľ); na temnom podlaží aj dlažba čierna (<code>$D023</code> = 0),
+bodky prezrádzali tvar bludiska.</li>
 </ul>
 
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
