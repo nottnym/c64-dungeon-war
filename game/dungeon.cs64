@@ -1,0 +1,98 @@
+// ============================================================================
+//  Dungeon War – hlavný súbor (C#64)
+//  Dizajn: docs/DungeonWar-design.html
+//
+//  Pamäť (kap. 10 dizajnu):
+//    $0801-$83FF  kód C#64
+//    $8000-$BFFF  VIC banka 2: obrazovka $8400 (ukazovatele spritov $87F8), znaky $8800,
+//                 $9000-$9FFF tieň znakovej ROM pre VIC – CPU: "DW LEVELS", sprity $A000-$AFFF, hudba $B000-$BFFF
+//    $C000-$CBFF  premenné C#64, halda $CC00-$CDFF
+//    $CE00-$CFFF  tabuľky std:mux2 (nič iné tam nesmie byť)
+//
+//  Krok 1: vlastná znaková sada, kreslenie podlažia z dát, stavový riadok. Fire (port 2) = ďalšie podlažie (test).
+// ============================================================================
+
+memoryLayout { vars = $C000  heap = $CC00  heapLimit = $CE00 }
+
+uses Vic = "std:vic"
+uses Joy = "std:joy"
+uses "layout.cs64"
+uses "maze.cs64"
+
+const T_P1:    byte[] = screenCodes("HRAC 1 000000")
+const T_FLOOR: byte[] = screenCodes("PODLAZIE 01")
+const T_P2:    byte[] = screenCodes("HRAC 2 000000")
+const T_LOADERR: byte[] = screenCodes("CHYBA: DW LEVELS")
+
+// VIC banka 2 ($8000), obrazovka $8400 ($D018 bity 4-7 = 1), znaky $8800 (bity 1-3 = 1), multicolor znaky.
+function initVideo(): void {
+    sei()
+    poke($DD02, peek($DD02) | $03)
+    poke($DD00, (peek($DD00) & $FC) | $01)
+    poke($D018, $12)
+    poke($D016, peek($D016) | $10)
+    Vic.setBorder(Vic.BLACK)
+    Vic.setBackground(Vic.BLACK)
+    poke($D022, 11)                       // tmavosivá – škáry kameňa
+    poke($D023, 9)                        // hnedá – dlažba
+    cli()
+}
+
+// Obrazovka medzerami, farby bielou (bajtové slučky – v C#64 kratšie ako fillMemory s konštantami).
+function clearScreen(): void {
+    for i = 0 to 249 {
+        poke(SCREEN + i, 32)
+        poke(SCREEN + 250 + i, 32)
+        poke(SCREEN + 500 + i, 32)
+        poke(SCREEN + 750 + i, 32)
+        poke(COLRAM + i, 1)
+        poke(COLRAM + 250 + i, 1)
+        poke(COLRAM + 500 + i, 1)
+        poke(COLRAM + 750 + i, 1)
+    }
+}
+
+// Text v kódoch obrazovky na riadok/stĺpec s farbou.
+function printAt(row: byte, col: byte, readonly text: byte[], color: byte): void {
+    var a: uint16 = SCREEN + rowAddr(row) + col
+    var ca: uint16 = a - SCREEN + COLRAM
+    var n: byte = (byte)text.length
+    for i = 0 to n - 1 { poke(a + i, text[i])  poke(ca + i, color) }
+}
+
+function drawStatus(): void {
+    printAt(0, 0, T_P1, 5)
+    printAt(0, 14, T_FLOOR, 1)
+    printAt(0, 27, T_P2, 8)
+    var n: byte = level + 1
+    poke(SCREEN + 23, 48 + n / 10)
+    poke(SCREEN + 24, 48 + n % 10)
+}
+
+function showLevel(): void {
+    loadLevel(level)
+    drawMaze()
+    drawStatus()
+}
+
+function main(): void {
+    includeAt(A_CHARSET, "assets/charset")
+    includeAt(A_SPRITES, "assets/sprites")
+    if (!loadFile("DW LEVELS")) {
+        initVideo()
+        clearScreen()
+        printAt(12, 12, T_LOADERR, 2)
+        while (true) { }
+    }
+    initVideo()
+    clearScreen()
+    showLevel()
+    while (true) {
+        // test: fire na porte 2 prepne podlažie (pustenie → ďalšie stlačenie)
+        while (!Joy.fire(Joy.read2())) { }
+        level = level + 1
+        if (level == N_LEVELS) { level = 0 }
+        showLevel()
+        while (Joy.fire(Joy.read2())) { }
+    }
+}

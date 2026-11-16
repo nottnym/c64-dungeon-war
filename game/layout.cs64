@@ -1,0 +1,17 @@
+// ============================================================================
+//  Dungeon War – rozloženie dát v pamäti a dátové súbory na disku
+//  Grafiku generuje tools/make_gfx.py, podlažia tools/make_levels.py (game/assets/*.bin).
+// ============================================================================
+
+// --- hlavný PRG: VIC banka 2 (includeAt v main) ---
+const SCREEN:    uint16 = $8400   // obrazovka; ukazovatele spritov $87F8
+const A_CHARSET: uint16 = $8800   // znaková sada (2 KB)
+const A_SPRITES: uint16 = $A000   // sprity, blok VIC 128 + číslo spritu
+const COLRAM:    uint16 = $D800
+const A_CODE_TOP: uint16 = $8400  // kód musí skončiť pod obrazovkou
+
+// --- "DW LEVELS" → $9000 (oblasť, kde VIC banky 2 vidí znakovú ROM – CPU tu má voľnú RAM) ---
+diskFile "DW LEVELS" at $9000 {
+    const A_LEVELS = place("assets/levels")      // podlažia po 66 B (make_levels.py)
+}
+const N_LEVELS: byte = 4

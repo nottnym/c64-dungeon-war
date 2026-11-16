@@ -1,0 +1,107 @@
+// ============================================================================
+//  Dungeon War – bludisko: dáta podlažia, kreslenie stien, tunely, brány, stavový riadok
+//  Bunka 3 × 3 znaky; mriežka 11 × 6 od stĺpca MZ_X, riadka MZ_Y (dizajn kap. 4 a 7).
+// ============================================================================
+
+const MZ_X: byte = 3
+const MZ_Y: byte = 2
+const MZ_W: byte = 11
+const MZ_H: byte = 6
+const TUN_ROW: byte = 2              // riadok buniek s tunelmi
+
+// kódy znakov (tools/make_gfx.py)
+const C_WALL: byte = 64              // + maska stien znaku (bit0 hore, 1 dole, 2 vľavo, 3 vpravo)
+const C_POST: byte = 80              // + roh 0 ĽH, 1 PH, 2 ĽD, 3 PD
+const C_FLOOR: byte = 84
+const C_TUN_OPEN: byte = 85
+const C_TUN_SHUT: byte = 86
+const C_GATE: byte = 147
+
+// farby (farebná RAM; ≥ 8 = multicolor znak)
+const COL_WALL: byte = 14            // multicolor + modrá
+const COL_FLOOR: byte = 8
+const COL_GATE: byte = 15            // multicolor + svetlosivá
+
+// bunka: bit0 stena vpravo, bit1 stena dole, bit2 tunel vpravo, bit3 brána dole (make_levels.py)
+var cell: byte[66] = new byte[66]
+var level: byte = 0
+
+// riadky obrazovky × 40 (bez násobenia)
+const ROW_LO: byte[] = [0, 40, 80, 120, 160, 200, 240, 24, 64, 104, 144, 184, 224, 8, 48, 88, 128, 168, 208, 248, 32, 72, 112, 152, 192]
+const ROW_HI: byte[] = [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3]
+function rowAddr(r: byte): uint16 { return ROW_LO[r] | (ROW_HI[r] << 8) }
+
+function loadLevel(n: byte): void {
+    var a: uint16 = A_LEVELS + (uint16)n * 66
+    for i = 0 to 65 { cell[i] = peek(a + i) }
+}
+
+// Steny bunky pre kreslenie: bit0 hore, bit1 dole, bit2 vľavo, bit3 vpravo (tunel a brána = otvor).
+function wallsOf(x: byte, y: byte): byte {
+    var i: byte = y * MZ_W + x
+    var c: byte = cell[i]
+    var w: byte = 0
+    if (y == 0) { w = 1 } else { if ((cell[i - MZ_W] & 2) != 0) { w = 1 } }
+    if ((c & 10) == 2) { w = w | 2 }
+    if (x == 0) { if (y != TUN_ROW) { w = w | 4 } } else { if ((cell[i - 1] & 1) != 0) { w = w | 4 } }
+    if ((c & 5) == 1) { w = w | 8 }
+    return w
+}
+
+// Znak na pozícii (c, r) v bunke 3 × 3 so stenami w.
+function cellChar(w: byte, c: byte, r: byte): byte {
+    var m: byte = 0
+    if (r == 0) { m = w & 1 }
+    if (r == 2) { m = m | (w & 2) }
+    if (c == 0) { m = m | (w & 4) }
+    if (c == 2) { m = m | (w & 8) }
+    if (m != 0) { return C_WALL + m }
+    return C_FLOOR                                // stĺpiky (C_POST) v rohoch bez stien rušili – nepoužívajú sa
+}
+
+function drawCell(x: byte, y: byte): void {
+    var w: byte = wallsOf(x, y)
+    var r0: byte = MZ_Y + y * 3
+    var c0: byte = MZ_X + x * 3
+    for r = 0 to 2 {
+        var a: uint16 = SCREEN + rowAddr(r0 + r) + c0
+        var ca: uint16 = a - SCREEN + COLRAM
+        for c = 0 to 2 {
+            var ch: byte = cellChar(w, c, r)
+            poke(a + c, ch)
+            if (ch == C_FLOOR) { poke(ca + c, COL_FLOOR) } else { poke(ca + c, COL_WALL) }
+        }
+    }
+}
+
+// Vstupná brána pod bunkou (stĺpec c0 na obrazovke): mreža hore, steny vľavo/vpravo/dole.
+function drawGate(c0: byte): void {
+    var a: uint16 = SCREEN + rowAddr(MZ_Y + MZ_H * 3) + c0
+    var ca: uint16 = a - SCREEN + COLRAM
+    for c = 0 to 2 { poke(a + c, C_GATE)  poke(ca + c, COL_GATE) }
+    a = a + 40
+    ca = ca + 40
+    poke(a, C_WALL + 4)  poke(a + 1, C_FLOOR)  poke(a + 2, C_WALL + 8)
+    poke(a + 40, C_WALL + 6)  poke(a + 41, C_WALL + 2)  poke(a + 42, C_WALL + 10)
+    for c = 0 to 2 { poke(ca + c, COL_WALL)  poke(ca + 40 + c, COL_WALL) }
+}
+
+function setTunnels(open: bool): void {
+    var a: uint16 = SCREEN + rowAddr(MZ_Y + TUN_ROW * 3 + 1)
+    var ch: byte = C_TUN_SHUT
+    if (open) { ch = C_TUN_OPEN }
+    poke(a + MZ_X - 1, ch)
+    poke(a + MZ_X + MZ_W * 3, ch)
+    var ca: uint16 = a - SCREEN + COLRAM
+    poke(ca + MZ_X - 1, COL_WALL)
+    poke(ca + MZ_X + MZ_W * 3, COL_WALL)
+}
+
+function drawMaze(): void {
+    for y = 0 to MZ_H - 1 {
+        for x = 0 to MZ_W - 1 { drawCell(x, y) }
+    }
+    drawGate(MZ_X)
+    drawGate(MZ_X + (MZ_W - 1) * 3)
+    setTunnels(true)
+}

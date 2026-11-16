@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dungeon War – dizajn dokument</title>
+<style>
+:root { --fg: #1d1d1d; --bg: #ffffff; --muted: #5a5a5a; --line: #cfcfcf; --code-bg: #f5f5f5; --th: #f0f0f0;
+        --note-bg: #fff8e1; --note-line: #ffb300; --ok-bg: #e8f5e9; --ok-line: #43a047;
+        --q-bg: #e3f2fd; --q-line: #1e88e5; --link: #0b5cad; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg: #e6e6e6; --bg: #17181a; --muted: #a6a6a6; --line: #3a3c40; --code-bg: #222428; --th: #26282c;
+          --note-bg: #332b12; --note-line: #c99a1e; --ok-bg: #16301b; --ok-line: #3e9a48;
+          --q-bg: #142a3d; --q-line: #4a9be0; --link: #7db7ff; }
+}
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.55; margin: 2rem auto;
+       max-width: 1080px; color: var(--fg); background: var(--bg); padding: 0 1rem; }
+h1 { border-bottom: 3px solid var(--fg); padding-bottom: .4em; }
+h2 { margin-top: 2.4em; border-bottom: 1px solid var(--line); padding-bottom: .25em; }
+h3 { margin-top: 1.6em; }
+a { color: var(--link); }
+pre { background: var(--code-bg); padding: .75rem 1rem; overflow-x: auto; border-radius: 4px; border: 1px solid var(--line); }
+code { font-family: Consolas, "Fira Code", monospace; font-size: .92em; }
+table { border-collapse: collapse; margin: 1em 0; width: 100%; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: .35em .7em; text-align: left; vertical-align: top; }
+th { background: var(--th); }
+td:first-child { white-space: nowrap; }
+.note { background: var(--note-bg); border-left: 4px solid var(--note-line); padding: .6em 1em; margin: 1em 0; border-radius: 4px; }
+.ok { background: var(--ok-bg); border-left: 4px solid var(--ok-line); padding: .6em 1em; margin: 1em 0; border-radius: 4px; }
+.q { background: var(--q-bg); border-left: 4px solid var(--q-line); padding: .6em 1em; margin: 1em 0; border-radius: 4px; }
+.muted { color: var(--muted); }
+nav ol { columns: 2; column-gap: 2.5rem; }
+@media (max-width: 640px) { nav ol { columns: 1; } }
+</style>
+</head>
+<body>
+<h1>Dungeon War – dizajn dokument</h1>
+<p class="muted">Verzia 0.1, 2026-11-16 – návrh na schválenie. Pôvodná akčná hra pre Commodore 64 v jazyku C#64
+(kompilátor z repozitára C64U-Code). Žáner: bludisková strieľačka pre jedného alebo dvoch hráčov naraz na jednej
+obrazovke. Postavy, nepriatelia, bludiská, grafika, zvuk aj texty sú vlastné.</p>
+
+<div class="ok"><b>Účel projektu:</b> preveriť jazyk C#64 a jeho knižnice na skutočnej hre – najmä triedený sprite
+multiplexer <code>std:mux2</code>, znakovú grafiku, AI viacerých postáv, zvuk, dátové súbory na disku a veľkosť/rýchlosť
+generovaného kódu. Hra je súkromný projekt; meria sa, čo sa v C#64 dá urobiť pohodlne a kde treba pomôcť kompilátoru
+alebo knižnici.</div>
+
+<div class="note"><b>Pracovné pravidlá testu C#64:</b>
+<ol style="margin:.3em 0">
+<li>Herná logika sa píše v <b>čistom C#64</b> (vrátane knižníc <code>std:*</code>). <code>asm {}</code> len vtedy, keď
+meranie ukáže, že úloha sa v C#64 nedá splniť (čas alebo pamäť) – každý taký blok má v kap. 19 zapísaný dôvod a
+meranie pred/po.</li>
+<li>Po každom kroku sa zapíše koniec kódu, najväčšie funkcie a čas logiky za snímok.</li>
+<li>Každé miesto, kde C#64 generuje zbytočne dlhý alebo pomalý kód, alebo kde chýba jazyková konštrukcia, ide do
+zoznamu námetov pre kompilátor (kap. 19) – s ukážkou zdrojového kódu a vygenerovaného assembleru.</li>
+</ol></div>
+
+<nav>
+<h2 style="margin-top:1em">Obsah</h2>
+<ol>
+<li><a href="#koncept">Koncept hry</a></li>
+<li><a href="#hrac">Hráči a ovládanie</a></li>
+<li><a href="#nepriatelia">Nepriatelia</a></li>
+<li><a href="#kobka">Kobka (bludisko)</a></li>
+<li><a href="#priebeh">Priebeh hry a úrovne</a></li>
+<li><a href="#body">Bodovanie a životy</a></li>
+<li><a href="#obrazovka">Obrazovka a grafika</a></li>
+<li><a href="#zvuk">Zvuk</a></li>
+<li><a href="#tech">Technický návrh v C#64</a></li>
+<li><a href="#pamat">Rozloženie pamäte a disk</a></li>
+<li><a href="#slucka">Hlavná slučka a časovanie</a></li>
+<li><a href="#ai">Pohyb a AI</a></li>
+<li><a href="#kolizie">Kolízie</a></li>
+<li><a href="#data">Dáta úrovní</a></li>
+<li><a href="#c64test">Čo hra preverí v C#64</a></li>
+<li><a href="#plan">Plán krokov</a></li>
+<li><a href="#rizika">Riziká</a></li>
+<li><a href="#otazky">Rozhodnutia</a></li>
+<li><a href="#vyvoj">Priebeh vývoja</a></li>
+</ol>
+</nav>
+
+<h2 id="koncept">1. Koncept hry</h2>
+<p>Hráči sú žoldnieri, ktorí zostupujú do kobky pod zrúcaninou pevnosti. Každé podlažie kobky je jedno bludisko na
+celú obrazovku plné príšer. Podlažie je vyčistené, keď sú zničené všetky príšery; potom sa otvorí schodisko na ďalšie
+podlažie. Čím hlbšie, tým rýchlejšie a zákernejšie príšery a tým viac z nich je neviditeľných – vidno ich len na
+radare a zblízka.</p>
+<ul>
+<li>Jedna obrazovka, pohľad zhora, pohyb po mriežke chodieb.</li>
+<li>1 alebo 2 hráči naraz – spolupracujú, ale navzájom sa môžu zasiahnuť (za body súpera).</li>
+<li>Každé podlažie má bočné tunely na okrajoch – prechod na druhú stranu; tunel sa po použití na chvíľu zavalí.</li>
+<li>Radar pod bludiskom ukazuje polohu všetkých príšer vrátane neviditeľných.</li>
+<li>Vlastné prvky: <b>truhlice</b> s pokladom, <b>fakľa</b> (dočasne odhalí neviditeľné príšery),
+<b>zlodej pokladu</b> (bonusová príšera, ktorá uteká) a <b>strážca hĺbky</b> (boss každého 5. podlažia).</li>
+</ul>
+
+<h2 id="hrac">2. Hráči a ovládanie</h2>
+<table>
+<tr><th>Hráč</th><th>Postava</th><th>Farba</th><th>Ovládanie</th><th>Štart</th></tr>
+<tr><td>1</td><td>Bojovník so samostrelom</td><td>svetlozelená</td><td>joystick port 2</td><td>vstupná brána vľavo dole</td></tr>
+<tr><td>2</td><td>Lovkyňa so samostrelom</td><td>oranžová</td><td>joystick port 1</td><td>vstupná brána vpravo dole</td></tr>
+</table>
+<ul>
+<li>Pohyb v 4 smeroch po chodbách; zatáčanie sa „prichytí“ na najbližšiu križovatku (tolerancia ±3 px), aby sa
+hralo plynulo.</li>
+<li>Fire = šíp v smere pohľadu. Na obrazovke je najviac <b>1 šíp na hráča</b>; ďalší až po zásahu alebo náraze do steny.</li>
+<li>Nový hráč (štart alebo po smrti) čaká vo <b>vstupnej bráne</b> s odpočtom 5 s (číslice nad bránou). Vyjde po
+stlačení fire alebo po odpočte. Kým je v bráne, nedá sa zasiahnuť.</li>
+<li>Klávesy: F1 = 1 hráč, F3 = 2 hráči, F7 / fire = štart, RUN/STOP = pauza (návrh).</li>
+</ul>
+
+<h2 id="nepriatelia">3. Nepriatelia</h2>
+<table>
+<tr><th>Príšera</th><th>Vzhľad (návrh)</th><th>Rýchlosť</th><th>Správanie</th><th>Body</th></tr>
+<tr><td>Slizák</td><td>zelený sliz s očami</td><td>pomalá</td><td>vždy viditeľný, ide k najbližšiemu hráčovi; na
+križovatkách sa občas rozhodne náhodne</td><td>100</td></tr>
+<tr><td>Kostlivec</td><td>biely kostlivec s lukom</td><td>stredná</td><td>vždy viditeľný; keď je s hráčom v jednej
+chodbe, zastaví a vystrelí (najviac 1 šíp na kostlivca)</td><td>200</td></tr>
+<tr><td>Tieň</td><td>fialový prízrak</td><td>rýchla</td><td><b>neviditeľný</b>; zviditeľní sa na 1 s každé 3–4 s,
+pri hráčovi bližšie ako 3 bunky a pri fakli; útočí dotykom</td><td>500</td></tr>
+<tr><td>Zlodej pokladu</td><td>malý škriatok s vreckom</td><td>veľmi rýchla</td><td>objaví sa po zničení poslednej
+príšery z podlažia 2+, beží k najbližšiemu tunelu a uteká; zásah = bonus a <b>dvojnásobné body</b> na ďalšom
+podlaží</td><td>1000</td></tr>
+<tr><td>Strážca hĺbky</td><td>kamenný golem (2 sprity)</td><td>pomalá, zrýchľuje</td><td>boss 5., 10., 15.…
+podlažia; vydrží 8 zásahov, hádže balvany, po každom zásahu sa na 2 s zviditeľní a zrýchli</td><td>2500</td></tr>
+</table>
+<p>Na podlaží je naraz najviac <b>6 príšer</b>. Podlažie začína s mixom podľa hĺbky (tab. v kap. 5); keď niektorú
+zničíte, na jej mieste sa môže objaviť ďalšia zo „zásoby“ podlažia (zo zásoby rastie podiel kostlivcov a tieňov).</p>
+
+<h2 id="kobka">4. Kobka (bludisko)</h2>
+<ul>
+<li>Mriežka <b>11 × 6 buniek</b>, bunka = <b>3 × 3 znaky</b> (24 × 24 px). Hracia plocha 33 × 18 znakov.</li>
+<li>Steny sú medzi bunkami: pre každú bunku 2 bity (stena vpravo, stena dole); okraj je vždy stena okrem dvoch
+<b>tunelov</b> (ľavý a pravý okraj v strednom riadku).</li>
+<li>Sprite 24 × 21 px sa zmestí do bunky – pohyb je vždy „v strede chodby“, čo zjednodušuje kolízie aj AI.</li>
+<li>Vstupné brány hráčov sú pod spodným riadkom buniek (mimo hracej plochy, 1 bunka).</li>
+<li>Truhlice a fakle sa objavujú v náhodných bunkách (najviac 1 truhlica a 1 fakľa naraz) ako znaky, nie sprity.</li>
+<li>Bludiská navrhujeme sami: sada <b>12 podlaží</b> (vlastné rozloženia) + zrkadlenie zľava doprava = 24 variantov.
+Bludisko musí byť súvislé (kontrola v generátore dát, kap. 14).</li>
+</ul>
+
+<h2 id="priebeh">5. Priebeh hry a úrovne</h2>
+<table>
+<tr><th>Podlažie</th><th>Na začiatku</th><th>Zásoba</th><th>Zvláštnosti</th></tr>
+<tr><td>1</td><td>6 slizákov</td><td>2 kostlivci</td><td>bez tieňov, bez zlodeja</td></tr>
+<tr><td>2–3</td><td>4 slizáci, 2 kostlivci</td><td>2 kostlivci, 1 tieň</td><td>zlodej pokladu</td></tr>
+<tr><td>4</td><td>3 slizáci, 3 kostlivci</td><td>3 tiene</td><td>„temné podlažie“: steny viditeľné len pri fakli a
+v okolí hráčov (návrh, kap. 18)</td></tr>
+<tr><td>5, 10, …</td><td>strážca hĺbky + 2 tiene</td><td>–</td><td>boss</td></tr>
+<tr><td>6+</td><td>mix podľa hĺbky</td><td>viac tieňov</td><td>každé podlažie +rýchlosť; od 8. aj kostlivci
+občas neviditeľní</td></tr>
+</table>
+<ul>
+<li><b>Zrýchľovanie:</b> rýchlosť príšer rastie s časom na podlaží (každých 20 s jeden stupeň) a keď zostanú 1–2 príšery.</li>
+<li>Medzi podlažiami krátka obrazovka „PODLAŽIE n“ so skóre; každé 4. podlažie bonusové „pokladnica“ (zbieranie truhlíc
+na čas, bez príšer) – voliteľné, kap. 18.</li>
+<li>Koniec hry: obaja hráči bez životov → „KONIEC VÝPRAVY“, najvyššie skóre (v pamäti, voliteľne na disk).</li>
+</ul>
+
+<h2 id="body">6. Bodovanie a životy</h2>
+<ul>
+<li>Body za príšery podľa tabuľky v kap. 3; zásah spoluhráča 1000 bodov (spoluhráč stratí život).</li>
+<li>Truhlica 300 bodov, fakľa 100 bodov + 8 s odhalenie tieňov.</li>
+<li>Dokončenie podlažia: 50 × číslo podlažia; dvojnásobok bodov platí na podlaží po zásahu zlodeja.</li>
+<li>Životy: 3 na hráča, ďalší pri 10 000 a potom každých 20 000 bodov, najviac 6.</li>
+</ul>
+
+<h2 id="obrazovka">7. Obrazovka a grafika</h2>
+<pre>
+riadok  0      HRÁČ 1  012300   PODLAŽIE 04   HRÁČ 2  004500
+riadok  1      ♥♥♥                                     ♥♥
+riadky  2–19   bludisko 33 × 18 znakov (stĺpce 3–35)
+riadky 20–22   vstupné brány hráčov (bunka 3 × 3 znaky vľavo dole / vpravo dole)
+riadky 21–23   radar v strede: 11 × 6 buniek, každý znak ukazuje 2 × 2 bunky (bunka = 4 × 4 px) → 6 × 3 znaky
+</pre>
+<ul>
+<li><b>Znaková grafika</b> v režime multicolor: steny (rohy, rovné úseky, T-kusy, kríže), podlaha, tunely, truhlica,
+fakľa, brána, číslice, písmená, radar. Kreslí sa v editore znakových sád C64U Code (BIN položka projektu).</li>
+<li><b>Sprity</b> multicolor: hráči (4 smery × 2 snímky + smrť), 3 druhy príšer (4 smery × 2 snímky), zlodej, golem
+(2 sprity vedľa seba), šípy (vodorovný/zvislý), balvan, výbuch (3 snímky). Kreslia sa v editore spritov C64U Code.</li>
+<li>Farby: spoločné multicolor farby spritov = čierna obrys + biela; vlastná farba určuje postavu.</li>
+<li><b>Radar:</b> 16 znakov pre všetky kombinácie obsadenia 2 × 2 buniek (bunka = blok 4 × 4 px); prekresľujú sa len
+zmenené znaky. Farba znaku = farba „najnebezpečnejšej“ príšery v ňom (tieň pred kostlivcom pred slizákom).</li>
+<li><b>Tieň:</b> keď je neviditeľný, jeho logický sprite je skrytý (Y = 255 v mux2) – radar ho ukazuje ďalej.</li>
+</ul>
+
+<h2 id="zvuk">8. Zvuk</h2>
+<ul>
+<li><b>Efekty</b> cez <code>std:sid</code> na hlasoch 1–2: výstrel, zásah, smrť hráča, zviditeľnenie tieňa, truhlica,
+tunel, zlodej, boss. Jednoduchý vlastný „SFX interpret“: tabuľka krokov (frekvencia, priebeh, dĺžka) na hlas, obsluha raz
+za snímok.</li>
+<li><b>Hudba</b> z vlastného SID tracker projektu (GT2 prehrávač): titulka a znelka začiatku podlažia. Počas hry hlas 3
+hrá jednoduchý rytmický podklad, ktorého tempo zrýchľuje s rýchlosťou príšer (vlastná melódia).</li>
+</ul>
+
+<h2 id="tech">9. Technický návrh v C#64</h2>
+<table>
+<tr><th>Oblasť</th><th>Riešenie</th><th>Knižnica / funkcia C#64</th></tr>
+<tr><td>Sprity</td><td>až 16 logických spritov (2 hráči, 6 príšer, 2 šípy hráčov, 4 strely príšer, zlodej, golem 2.
+polovica); triedenie podľa Y, 8 na riadok</td><td><code>std:mux2</code> (MAX 24, ~186 cyklov/sprite)</td></tr>
+<tr><td>Vstup</td><td>2 joysticky, raz za snímok</td><td><code>std:joy</code> <code>read2()</code>, <code>read1()</code></td></tr>
+<tr><td>Grafika</td><td>multicolor znaky, vlastná sada, farby z tabuľky</td><td><code>std:vic</code>, <code>includeAt</code>/<code>place</code></td></tr>
+<tr><td>Zvuk</td><td>SFX interpret + GT2 hudba</td><td><code>std:sid</code>, SID položka projektu</td></tr>
+<tr><td>Dáta</td><td>úrovne, sprity, znaky v dátových súboroch na D64</td><td><code>diskFile</code> / <code>place</code>, <code>loadData</code></td></tr>
+<tr><td>Časovanie</td><td>logika raz za snímok (50 Hz PAL)</td><td><code>Mux2.waitFrame()</code></td></tr>
+<tr><td>Náhoda</td><td>8-bit LFSR + šum SID hlasu 3 pri štarte</td><td>vlastná funkcia</td></tr>
+</table>
+<p>Moduly zdrojového kódu (návrh):</p>
+<table>
+<tr><th>Súbor</th><th>Obsah</th></tr>
+<tr><td><code>dungeon.cs64</code></td><td>hlavný súbor: <code>memoryLayout</code>, init, hlavná slučka, stavy hry</td></tr>
+<tr><td><code>layout.cs64</code></td><td><code>diskFile</code> bloky a adresy dát</td></tr>
+<tr><td><code>maze.cs64</code></td><td>dekódovanie a kreslenie bludiska, tunely, truhlice, fakle, radar</td></tr>
+<tr><td><code>player.cs64</code></td><td>hráči, brány, šípy, životy, skóre</td></tr>
+<tr><td><code>monster.cs64</code></td><td>príšery, zlodej, boss, AI, zásoba podlažia, zrýchľovanie</td></tr>
+<tr><td><code>sprites.cs64</code></td><td>animácie, mapovanie na logické sprity <code>mux2</code></td></tr>
+<tr><td><code>sound.cs64</code></td><td>SFX interpret, napojenie hudby</td></tr>
+<tr><td><code>screens.cs64</code></td><td>titulka, „PODLAŽIE n“, koniec hry, najvyššie skóre</td></tr>
+</table>
+
+<h2 id="pamat">10. Rozloženie pamäte a disk</h2>
+<table>
+<tr><th>Oblasť</th><th>Obsah</th></tr>
+<tr><td><code>$0801–$7FFF</code></td><td>program C#64 (cieľ do ~20 KB, rezerva sa sleduje po každom kroku)</td></tr>
+<tr><td><code>$8000–$BFFF</code></td><td>VIC banka 2: obrazovka <code>$8400</code> (ukazovatele spritov <code>$87F8</code>),
+znaková sada <code>$8800–$8FFF</code>, sprity <code>$A000–$AFFF</code> (64 blokov), voľné <code>$B000–$BFFF</code>
+(hudba). <code>$9000–$9FFF</code> vidí VIC ako znakovú ROM – sem len dáta pre CPU (úrovne, tabuľky).</td></tr>
+<tr><td><code>$C000–$CDFF</code></td><td>premenné C#64</td></tr>
+<tr><td><code>$CE00–$CFFF</code></td><td>tabuľky <code>std:mux2</code> (nič iné tam nesmie byť)</td></tr>
+<tr><td><code>$D000–$DFFF</code></td><td>I/O</td></tr>
+<tr><td><code>$E000–$FFF9</code></td><td>voliteľne dáta pod KERNAL-om (ak by hlavný program nestačil), KERNAL potom vypnutý</td></tr>
+</table>
+<p>Disk D64 „DUNGEON WAR“: hlavný program + dátové súbory <code>DW GFX</code> (znaky, sprity), <code>DW LEVELS</code>
+(podlažia, tabuľky), <code>DW MUSIC</code>. Skladá ho kompilátor (<code>cs64build --d64</code> / C64U Code) z
+<code>diskFile</code> blokov.</p>
+<div class="note">Presné adresy sa potvrdia v kroku 1 podľa toho, kam GT2 prehrávač ukladá hudbu a koľko pamäte
+reálne zaberie <code>std:mux2</code> s naším počtom spritov.</div>
+
+<h2 id="slucka">11. Hlavná slučka a časovanie</h2>
+<pre>
+loop:
+    Mux2.waitFrame()            // začiatok snímku (IRQ mux2 beží samo)
+    readInput()                 // 2 joysticky
+    updatePlayers()             // pohyb po mriežke, brány, šípy
+    updateMonsters()            // AI raz za snímok, rýchlosť = subpixelový akumulátor
+    updateShots()
+    collide()                   // obdĺžniky, kap. 13
+    updateTunnels() / updateItems()
+    updateRadar()               // max. 4 bunky za snímok
+    updateSprites()             // → Mux2.setSprite / skrytie
+    sfxTick()
+    if (stav podlažia sa zmenil) { … }
+</pre>
+<ul>
+<li>Rozpočet: mux2 ~186 cyklov × 16 spritov ≈ 3 000 cyklov; hra má na logiku ~15 000 cyklov za snímok (PAL, bez
+badlines). Cieľ: logika do 10 000 cyklov, meria sa profilerom C64U Code (<code>.prof</code>).</li>
+<li>Rýchlosti ako 8.8 fixed-point: príšera sa posunie o celé pixely podľa akumulátora, takže 16 stupňov rýchlosti bez
+nepravidelného trhania.</li>
+</ul>
+
+<h2 id="ai">12. Pohyb a AI</h2>
+<ul>
+<li>Postavy sa pohybujú medzi stredmi buniek; rozhodnutie o smere padá len v strede bunky (ukladá sa smer a počet
+pixelov do ďalšieho stredu).</li>
+<li><b>Slizák:</b> na križovatke z voľných smerov (bez otočenia späť) vyberie ten, ktorý zmenší vzdialenosť
+(Manhattan) k bližšiemu hráčovi; s pravdepodobnosťou 25 % náhodne.</li>
+<li><b>Kostlivec:</b> ako slizák; ak je hráč v tom istom riadku/stĺpci bez steny medzi nimi, zastaví a vystrelí
+(cooldown 1,5 s).</li>
+<li><b>Tieň:</b> mapa vzdialeností od hráčov (BFS po 66 bunkách, prepočet 1× za 8 snímkov, stačí 66 B) – ide
+najkratšou cestou; neviditeľnosť podľa časovača a vzdialenosti.</li>
+<li><b>Zlodej:</b> rovnaká BFS mapa, ale od tunelov – uteká najkratšou cestou von.</li>
+<li><b>Strážca hĺbky:</b> pomalý prenasledovateľ cez BFS, každých 2–3 s hodí balvan (strela 2× pomalšia ako šíp).</li>
+<li>Objavovanie príšer: v rohových bunkách najďalej od hráčov, s 1 s blikaním pred objavením.</li>
+</ul>
+
+<h2 id="kolizie">13. Kolízie</h2>
+<ul>
+<li>Softvérové obdĺžniky (nie HW kolízie VIC – pri multiplexe sú nespoľahlivé): postava 16 × 16 px v strede spritu,
+šíp 6 × 2 / 2 × 6 px.</li>
+<li>Šíp vs. stena: test znaku pod hrotom šípu (steny majú kódy z jedného rozsahu).</li>
+<li>Kontroly len medzi relevantnými pármi: šípy hráčov × príšery a druhý hráč, strely príšer × hráči, príšery × hráči.
+Najviac ~40 testov za snímok.</li>
+</ul>
+
+<h2 id="data">14. Dáta úrovní</h2>
+<ul>
+<li>Podlažie = 66 bajtov (2 bity stien na bunku, horné bity = značky: brána, miesto objavenia, zakázaná bunka pre truhlicu).</li>
+<li>Bludiská sa píšu v čitateľnom textovom tvare (ASCII art) v <code>tools/levels.txt</code>, generátor
+<code>tools/make_levels.py</code> overí súvislosť, tunely a brány a vyrobí <code>assets/levels.bin</code>.</li>
+<li>Kreslenie: z 2 bitov steny každej bunky a jej susedov sa vyberie znak rohu/steny (tabuľka 16 kombinácií).</li>
+</ul>
+
+<h2 id="c64test">15. Čo hra preverí v C#64</h2>
+<table>
+<tr><th>Oblasť</th><th>Otázka</th><th>Ako zmerať</th></tr>
+<tr><td><code>std:mux2</code></td><td>Zvládne 16 spritov s triedením bez blikania a vypadávania v hre so zhlukmi?</td><td><code>dropped()</code>, <code>wasLate()</code>, test na C64U</td></tr>
+<tr><td>Veľkosť kódu</td><td>Koľko stojí bežná herná logika v C#64 oproti odhadu v assembleri?</td><td>koniec kódu po každom kroku, mapa funkcií z <code>.labels</code></td></tr>
+<tr><td>Rýchlosť</td><td>Stihne logika 8 postáv + BFS za snímok?</td><td>profiler C64U Code, rastrová farba okraja</td></tr>
+<tr><td>Polia a štruktúry</td><td>Stav postáv ako paralelné bajtové polia vs. <code>struct</code>/<code>class</code></td><td>porovnanie veľkosti a cyklov</td></tr>
+<tr><td>Disk</td><td>Viac dátových súborov cez <code>diskFile</code>/<code>place</code>, nahrávanie pri štarte</td><td>D64 v emulátore aj na C64U</td></tr>
+<tr><td>Nástroje</td><td>Editor spritov, editor znakov, SID tracker v jednom projekte</td><td>workflow bez externých nástrojov</td></tr>
+</table>
+<div class="note">Poučenia z Bruce Lee: <code>copyToMemory</code>/<code>fillMemory</code> s konštantnými adresami
+sa prekladajú zbytočne dlho (≈ 70 B) – krátke bajtové slučky <code>peek/poke</code> s <code>abs,x</code> sú kratšie;
+16-bit aritmetiku a viacnásobné volania v jednom výraze držať v jednoduchých bajtových premenných. Takéto miesta budeme
+zapisovať do zoznamu námetov pre kompilátor.</div>
+
+<h2 id="plan">16. Plán krokov</h2>
+<table>
+<tr><th>Krok</th><th>Obsah</th><th>Hotovo, keď</th></tr>
+<tr><td>0</td><td>Kostra projektu v C64U Code, <code>memoryLayout</code>, D64, prázdna obrazovka, build skript</td><td>D64 sa spustí v emulátore</td></tr>
+<tr><td>1</td><td>Znaková sada, kreslenie jedného bludiska z dát, stavový riadok</td><td>podlažie 1 sa vykreslí</td></tr>
+<tr><td>2</td><td>Hráč 1: sprite, pohyb po mriežke, kolízie so stenami, tunely</td><td>dá sa prejsť celé bludisko</td></tr>
+<tr><td>3</td><td><code>std:mux2</code> + 6 slizákov s jednoduchou AI</td><td>8 spritov bez blikania</td></tr>
+<tr><td>4</td><td>Šípy, zásahy, smrť, brány, životy, skóre</td><td>hrateľné podlažie 1</td></tr>
+<tr><td>5</td><td>Kostlivce, tiene (neviditeľnosť), radar, BFS</td><td>podlažia 2–4</td></tr>
+<tr><td>6</td><td>Hráč 2 (port 1), vzájomné zásahy</td><td>hra dvoch hráčov</td></tr>
+<tr><td>7</td><td>Zlodej, truhlice, fakle, zrýchľovanie, priebeh podlaží</td><td>12 podlaží</td></tr>
+<tr><td>8</td><td>Strážca hĺbky (boss)</td><td>podlažie 5</td></tr>
+<tr><td>9</td><td>Zvukové efekty, hudba, titulka, koniec hry, najvyššie skóre</td><td>kompletná hra</td></tr>
+<tr><td>10</td><td>Ladenie obtiažnosti, test na C64 Ultimate, správa o C#64</td><td>zoznam námetov pre kompilátor</td></tr>
+</table>
+<p>Po každom kroku: build, kontrola konca kódu, test vo vstavanom emulátore C64U Code, zápis do tohto dokumentu
+(kap. „Priebeh“ pribudne s prvým krokom).</p>
+
+<h2 id="rizika">17. Riziká</h2>
+<ul>
+<li><b>Zhluky spritov:</b> pri 2 hráčoch a príšerách v jednom riadku môže byť na rastrovej línii viac ako 8 spritov →
+mux2 sprite vynechá. Zmiernenie: strely ako znaky namiesto spritov (ak treba), obmedzenie príšer v jednom riadku buniek.</li>
+<li><b>Veľkosť kódu C#64:</b> z Bruce Lee vieme, že sa hodí sledovať rezervu po každom kroku; pri núdzi dáta pod KERNAL
+a kritické rutiny v <code>asm {}</code>.</li>
+<li><b>Emulátor nemodeluje raster presne</b> (poznámka v dokumentácii mux2) – časovanie IRQ treba overiť na C64U.</li>
+<li><b>Hrateľnosť:</b> neviditeľné príšery musia byť férové – zviditeľnenie pri priblížení a zvukové varovanie.</li>
+</ul>
+
+<h2 id="otazky">18. Rozhodnutia (2026-11-16)</h2>
+<div class="ok">
+<ol>
+<li>Téma kobky, žoldnieri, slizák, kostlivec, tieň, zlodej pokladu a strážca hĺbky – <b>schválené</b>.</li>
+<li>Hráči sa môžu navzájom zasiahnuť (súperenie, 1000 bodov za zásah spoluhráča) – <b>áno</b>.</li>
+<li>„Temné podlažie“ (steny viditeľné len pri fakli a v okolí hráčov) – <b>áno</b>, každé 4. podlažie okrem bossa.</li>
+<li>Bonusová „pokladnica“ (zbieranie truhlíc na čas, bez príšer) – <b>áno</b>.</li>
+<li>Strely hráčov aj príšer sú <b>sprity</b> (mux2 do 16 logických spritov).</li>
+<li>Najvyššie skóre sa ukladá na disk – <b>áno</b>.</li>
+<li>Prvú verziu znakovej sady a spritov <b>navrhne Claude</b> (zdroj ako text v <code>tools/</code> → BIN položky),
+neskôr ich používateľ prekreslí v editoroch C64U Code. Hudba tiež prvá verzia od Clauda.</li>
+<li>Projekt v <code>C:\git\c64\Dungeon war</code>, vlastný git repozitár (v <code>C:\git\c64\.gitignore</code> výnimka
+ako Bruce Lee), neskôr vlastný repozitár na GitHube.</li>
+</ol>
+</div>
+
+<h2 id="vyvoj">19. Priebeh vývoja</h2>
+<h3>Krok 0 – kostra (2026-11-16)</h3>
+<ul>
+<li><code>game/dungeon.cs64</code>: <code>memoryLayout</code> (premenné <code>$C000</code>, halda <code>$CC00–$CDFF</code>, mux2 <code>$CE00</code>),
+VIC banka 2, obrazovka <code>$8400</code>, zatiaľ písmo zo znakovej ROM (<code>$D018 = $14</code>), titulný text.</li>
+<li><code>game/build.sh</code>: <code>cs64build</code> z repozitára Bruce Lee → <code>build/dungeon.prg</code> (561 B) a
+<code>build/dungeon.d64</code>.</li>
+<li>C#64: <code>for … in</code> nejde cez poľový parameter (dĺžka nie je staticky známa); konštantné pole sa dá
+odovzdať len do <code>readonly</code> parametra.</li>
+</ul>
+
+<h3>Krok 1 – znaková sada a podlažie (2026-11-16)</h3>
+<ul>
+<li>Grafika (prvá verzia, prekreslí sa v editoroch): <code>tools/make_gfx.py</code> → <code>assets/charset.bin</code>
+(vlastné písmo na štandardných kódoch obrazovky, 16 stien podľa masky okrajov, dlažba, tunely, radar, predmety) a
+<code>assets/sprites.bin</code> (42 spritov: hráč, slizák, kostlivec, tieň v 4 smeroch × 2, zlodej, golem z 2 spritov,
+šípy, balvan, výbuch). Prehľad kódov: <code>assets/gfx_map.txt</code>.</li>
+<li>Podlažia: <code>tools/levels.txt</code> (ASCII, 4 vlastné rozloženia) → <code>tools/make_levels.py</code> (kontrola
+rozmerov, okraja, tunelov, brán, súvislosti) → <code>assets/levels.bin</code> (66 B na podlažie) → dátový súbor
+<code>DW LEVELS</code> na <code>$9000</code>.</li>
+<li><code>maze.cs64</code>: kreslenie bunky 3 × 3 znaky podľa stien (znak = 64 + maska okrajov), brány, tunely;
+<code>dungeon.cs64</code>: multicolor znaky, stavový riadok, fire na porte 2 prepína podlažia (test).</li>
+<li>Koniec kódu <code>$1292</code> (≈ 2,7 KB). PRG zatiaľ obsahuje grafiku cez <code>includeAt</code> (do <code>$AA7F</code>) –
+presunie sa do <code>DW GFX</code>.</li>
+<li>Projekt v C64U Code: <code>tools/make_sql_project.py</code> (SQL Server / PostgreSQL), lokálne ID 35.</li>
+<li>Stĺpiky v rohoch buniek bez stien vyzerali ako osamelé bodky – vypustené.</li>
+</ul>
+</body>
+</html>

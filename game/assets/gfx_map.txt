@@ -1,0 +1,132 @@
+# znaky (kód obrazovky → meno)
+  0  podlaha
+  1  A
+  2  B
+  3  C
+  4  D
+  5  E
+  6  F
+  7  G
+  8  H
+  9  I
+ 10  J
+ 11  K
+ 12  L
+ 13  M
+ 14  N
+ 15  O
+ 16  P
+ 17  Q
+ 18  R
+ 19  S
+ 20  T
+ 21  U
+ 22  V
+ 23  W
+ 24  X
+ 25  Y
+ 26  Z
+ 32  medzera
+ 33  !
+ 44  ,
+ 45  -
+ 46  .
+ 48  0
+ 49  1
+ 50  2
+ 51  3
+ 52  4
+ 53  5
+ 54  6
+ 55  7
+ 56  8
+ 57  9
+ 58  :
+ 64  stena maska 0000 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 65  stena maska 0001 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 66  stena maska 0010 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 67  stena maska 0011 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 68  stena maska 0100 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 69  stena maska 0101 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 70  stena maska 0110 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 71  stena maska 0111 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 72  stena maska 1000 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 73  stena maska 1001 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 74  stena maska 1010 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 75  stena maska 1011 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 76  stena maska 1100 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 77  stena maska 1101 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 78  stena maska 1110 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 79  stena maska 1111 (bit0 hore,1 dole,2 vľavo,3 vpravo)
+ 80  stĺpik v rohu 0 (0 ĽH, 1 PH, 2 ĽD, 3 PD)
+ 81  stĺpik v rohu 1 (0 ĽH, 1 PH, 2 ĽD, 3 PD)
+ 82  stĺpik v rohu 2 (0 ĽH, 1 PH, 2 ĽD, 3 PD)
+ 83  stĺpik v rohu 3 (0 ĽH, 1 PH, 2 ĽD, 3 PD)
+ 84  podlaha – dlažba
+ 85  tunel – otvor (šípky)
+ 86  tunel – zavalený
+128  radar maska 0000
+129  radar maska 0001
+130  radar maska 0010
+131  radar maska 0011
+132  radar maska 0100
+133  radar maska 0101
+134  radar maska 0110
+135  radar maska 0111
+136  radar maska 1000
+137  radar maska 1001
+138  radar maska 1010
+139  radar maska 1011
+140  radar maska 1100
+141  radar maska 1101
+142  radar maska 1110
+143  radar maska 1111
+144  truhlica ĽH
+145  truhlica PH
+146  fakľa
+147  brána – mreža
+148  srdce (život)
+
+# sprity (číslo → meno; blok VIC = $A000/64 + číslo = 128 + číslo)
+  0  hráč vpravo 1
+  1  hráč vpravo 2
+  2  hráč vľavo 1
+  3  hráč vľavo 2
+  4  hráč hore 1
+  5  hráč hore 2
+  6  hráč dole 1
+  7  hráč dole 2
+  8  slizák vpravo 1
+  9  slizák vpravo 2
+ 10  slizák vľavo 1
+ 11  slizák vľavo 2
+ 12  slizák hore 1
+ 13  slizák hore 2
+ 14  slizák dole 1
+ 15  slizák dole 2
+ 16  kostlivec vpravo 1
+ 17  kostlivec vpravo 2
+ 18  kostlivec vľavo 1
+ 19  kostlivec vľavo 2
+ 20  kostlivec hore 1
+ 21  kostlivec hore 2
+ 22  kostlivec dole 1
+ 23  kostlivec dole 2
+ 24  tieň vpravo 1
+ 25  tieň vpravo 2
+ 26  tieň vľavo 1
+ 27  tieň vľavo 2
+ 28  tieň hore 1
+ 29  tieň hore 2
+ 30  tieň dole 1
+ 31  tieň dole 2
+ 32  zlodej 1
+ 33  zlodej 2
+ 34  strážca hĺbky – ľavá polovica
+ 35  strážca hĺbky – pravá polovica
+ 36  šíp vodorovne
+ 37  šíp zvisle
+ 38  balvan
+ 39  výbuch 1
+ 40  výbuch 2
+ 41  výbuch 3
