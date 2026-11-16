@@ -402,6 +402,37 @@ k bunke hráča, 1/4 náhodne (8-bit LFSR <code>rand8</code>), v slepej uličke 
 <li>Zatiaľ chýba: príšery sa navzájom prekrývajú (riešiť v kroku 5 – rozostupy pri objavovaní a v AI).</li>
 </ul>
 
+<h3>Krok 4 – šípy, zásahy, smrť, brána, životy, skóre (2026-11-16)</h3>
+<ul>
+<li><code>player.cs64</code>: stavy hráča (brána s odpočtom 5 s → živý → výbuch → brána / koniec), výstup z brány na fire,
+joystick hore alebo po odpočte (o 1 bunku hore), 1 s nezraniteľnosti po výstupe, 3 životy; šíp 4 px/snímok v smere
+pohľadu, koniec pri stene (test pri zmene bunky tabuľkou <code>CELL_OF</code>).</li>
+<li><code>monster.cs64</code>: výbuch a návrat príšery po 3 s; keď hráč nie je živý v bludisku, príšery sa túlajú
+(inak čakali pri výstupe z brány a hráča hneď zabili).</li>
+<li><code>combat.cs64</code>: šíp × príšera (|dx|, |dy| &lt; 10), príšera × hráč (&lt; 14). <code>hud.cs64</code>: skóre ako
+desiatkové číslice s prenosom (bez 16-bit), srdiečka životov, odpočet v bráne, „QUEST OVER / PRESS FIRE“.</li>
+<li><code>maze.cs64</code>: <code>CELL_OF[256]</code> (pixel → bunka) nahradila v pohybe hráča <code>x % 24</code> a
+<code>x / 24</code>, mreža brány sa otvára/zatvára.</li>
+<li>Overené v C64U Code: výstup z brány, zásah slizáka šípom (+100), smrť hráča a návrat do brány, ubúdanie životov.</li>
+<li>Koniec kódu <code>$31A4</code> (+2,2 KB vrátane 256 B tabuľky); 8 logických spritov.</li>
+</ul>
+
+<h3>Code review kroku 4 (nezávislý agent, 2026-11-16) – opravené</h3>
+<table>
+<tr><th>#</th><th>Nález</th><th>Oprava</th></tr>
+<tr><td>1</td><td>Vysoká: otočením späť po výstupe stál hráč živý v bráne; šíp nadol odtiaľ čítal <code>cell</code> mimo poľa a preletel stenou.</td><td>Šíp z riadku brány: hore prejde, inak zanikne; <code>monCanGo</code> mimo bludiska vždy false.</td></tr>
+<tr><td>2</td><td>Tunel sa dal prejsť bez zavalenia (z miesta / po zvislom príchode, x 0 → 255).</td><td>Tunel podľa nového smeru aj držaného smeru; <code>canGo</code> na okraji vždy false.</td></tr>
+<tr><td>3</td><td>Brána ako nedosiahnuteľný úkryt; šíp hore z priechodu brány zanikol (bit steny brány).</td><td>Otočenie späť nadol na ceste z brány zakázané; šíp hore z priechodu prejde.</td></tr>
+<tr><td>4</td><td>Príšera sa mohla objaviť priamo na hráčovi.</td><td>Po výbuchu presun na miesto objavenia, 1 s blikanie, návrat odložený, kým je hráč bližšie ako 2 bunky.</td></tr>
+<tr><td>5</td><td><code>newGame</code> nenuloval zavalenie tunelov.</td><td><code>tunShut</code>, <code>pinv</code>, <code>pfirePrev</code> v <code>newGame</code>.</td></tr>
+<tr><td>6</td><td>Reštart po QUEST OVER na držaný fire.</td><td>Len nové stlačenie.</td></tr>
+<tr><td>7</td><td>Odpočet brány pod spritom hráča.</td><td>Odpočet vedľa brány.</td></tr>
+<tr><td>8</td><td>Zastaraný komentár <code>updatePlayer</code>.</td><td>Opravený.</td></tr>
+</table>
+<p>Overené v C64U Code: QUEST OVER → nové stlačenie fire → nová hra, odpočet vedľa brány viditeľný, po výstupe sa
+hráč joystickom dole do brány nevráti. Koniec kódu <code>$329B</code>. Poznámka k hrateľnosti: slizáky zatiaľ hráča zabijú
+rýchlo – vyladí sa v kroku 10.</p>
+
 <h3>Úprava pohybu hráča (2026-11-16)</h3>
 <ul><li>Pohyb ide o jednu bunku; v jej strede pokračuje len pri držanom joysticku (aj cez tunel), inak zastane.
 Overené: krátke stlačenie = presne 24 px (y 144 → 120 → 96).</li></ul>

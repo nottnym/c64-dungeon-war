@@ -39,6 +39,7 @@ function rand8(): byte {                     // "rnd" je vstavaná funkcia
 
 // Príšera smie ísť z bunky smerom d? (bez tunelov a brán)
 function monCanGo(cx: byte, cy: byte, d: byte): bool {
+    if (cy >= MZ_H) { return false }             // mimo bludiska (riadok brány) – nikdy nečítať za poľom cell
     var i: byte = cy * MZ_W + cx
     if (d == D_UP) {
         if (cy == 0) { return false }
@@ -89,7 +90,9 @@ function chooseDir(i: byte): byte {
         d = d << 1
     }
     if (n == 0) { return back }                  // slepá ulička
-    if (n > 1 && rand8() < 64) {                   // náhodne jeden z kandidátov
+    // Hráč v bráne alebo mŕtvy → túlanie (inak by príšery čakali pri výstupe z brány); inak 1/4 náhodne.
+    var wander: bool = pstate[0] != PS_ALIVE
+    if (n > 1 && (wander || rand8() < 64)) {
         var k: byte = rand8() & 3
         d = 1
         while (true) {
@@ -162,3 +165,55 @@ function monShape(i: byte): byte {
     if ((mstep[i] & 8) != 0) { f = f + 1 }
     return SPR_SLIME + f
 }
+
+// ---------------------------------------------------------------------------
+//  Smrť a návrat príšer (krok 4)
+// ---------------------------------------------------------------------------
+const BOOM_TIME: byte = 24
+const RESPAWN_TIME: byte = 150           // 3 s
+
+var mboom: byte[6] = [0, 0, 0, 0, 0, 0]  // > 0 = výbuch (odpočet snímok)
+var mresp: byte[6] = [0, 0, 0, 0, 0, 0]  // > 0 = čaká na návrat
+
+function killMonster(i: byte): void {
+    mtype[i] = M_NONE
+    mboom[i] = BOOM_TIME
+    mresp[i] = RESPAWN_TIME
+}
+
+const BLINK_TIME: byte = 50              // posledná 1 s pred návratom príšera bliká na mieste objavenia
+const SAFE_DIST: byte = 2                // návrat sa odloží, kým je živý hráč bližšie (bunky, Manhattan)
+
+function updateMonster(i: byte): void {
+    if (mtype[i] != M_NONE) { moveMonster(i)  return }
+    if (mboom[i] != 0) {
+        mboom[i] = mboom[i] - 1
+        if (mboom[i] == 0) {                     // po výbuchu na miesto objavenia (blikanie tam)
+            mcx[i] = SPAWN_X[i]
+            mcy[i] = SPAWN_Y[i]
+            moff[i] = 0
+            mdir[i] = 0
+            mface[i] = D_DOWN
+        }
+        return
+    }
+    if (mresp[i] == 0) { return }
+    if (mresp[i] == 1 && pstate[0] == PS_ALIVE &&
+        absDiff(mcx[i], pcx[0]) + absDiff(mcy[i], pcy[0]) < SAFE_DIST) { return }   // code review č. 4
+    mresp[i] = mresp[i] - 1
+    if (mresp[i] == 0) { spawnMonster(i, M_SLIME) }
+}
+
+// Tvar spritu príšery: živá → animácia, výbuch → snímky výbuchu, inak 0 = skrytá.
+function monSprite(i: byte): byte {
+    if (mtype[i] != M_NONE) { return monShape(i) }
+    var t: byte = mboom[i]
+    if (t == 0) {
+        if (mresp[i] != 0 && mresp[i] <= BLINK_TIME && (mresp[i] & 4) != 0) { return monShape(i) }
+        return 0
+    }
+    if (t > 16) { return SPR_BOOM }
+    if (t > 8) { return SPR_BOOM + 1 }
+    return SPR_BOOM + 2
+}
+

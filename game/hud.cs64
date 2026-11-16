@@ -1,0 +1,73 @@
+// ============================================================================
+//  Dungeon War – stavový riadok: skóre (desiatkové číslice, bez 16-bit aritmetiky), životy, odpočet brány, hlášky
+// ============================================================================
+
+const C_HEART: byte = 148
+const COL_HEART: byte = 2               // červená (hires znak)
+const SCORE_COL1: byte = 9              // "PLAYER 1 " → číslice od stĺpca 9
+const SCORE_COL2: byte = 34             // "PLAYER 2 " od stĺpca 25 → číslice od 34
+const MAX_LIVES: byte = 6
+
+var scoreD: byte[12] = new byte[12]     // hráč p: číslice scoreD[p*6 .. p*6+5], najvyššia prvá
+
+const T_QUEST_OVER: byte[] = screenCodes("QUEST OVER")
+const T_PRESS_FIRE: byte[] = screenCodes("PRESS FIRE")
+
+function scoreBase(p: byte): byte {
+    if (p == 0) { return 0 }
+    return 6
+}
+
+function scoreCol(p: byte): byte {
+    if (p == 0) { return SCORE_COL1 }
+    return SCORE_COL2
+}
+
+function showScore(p: byte): void {
+    var b: byte = scoreBase(p)
+    var c: byte = scoreCol(p)
+    for i = 0 to 5 { poke(SCREEN + c + i, 48 + scoreD[b + i]) }
+}
+
+// Pripočíta k číslici na pozícii pos (0 = statisíce … 5 = jednotky) hodnotu v (0–9) s prenosom.
+function addScore(p: byte, pos: byte, v: byte): void {
+    var i: byte = scoreBase(p) + pos
+    var b: byte = scoreBase(p)
+    var c: byte = v
+    while (c != 0) {
+        var d: byte = scoreD[i] + c
+        c = 0
+        if (d >= 10) { d = d - 10  c = 1 }
+        scoreD[i] = d
+        if (i == b) { c = 0 } else { i = i - 1 }
+    }
+    showScore(p)
+}
+
+function resetScore(p: byte): void {
+    var b: byte = scoreBase(p)
+    for i = 0 to 5 { scoreD[b + i] = 0 }
+    showScore(p)
+}
+
+// Srdiečka životov v riadku 1 (hráč 1 zľava, hráč 2 sprava).
+function showLives(p: byte, n: byte): void {
+    var c: byte = 0
+    if (p != 0) { c = 40 - MAX_LIVES }
+    for i = 0 to MAX_LIVES - 1 {
+        var ch: byte = 32
+        if (i < n) { ch = C_HEART }
+        poke(SCREEN + 40 + c + i, ch)
+        poke(COLRAM + 40 + c + i, COL_HEART)
+    }
+}
+
+// Odpočet vedľa brány (stredný riadok brány, mimo spritu hráča – code review č. 7): hráč 1 vpravo od svojej
+// brány, hráč 2 vľavo od svojej; 0 = zmazať.
+function showGateCount(c0: byte, n: byte): void {
+    var a: uint16 = SCREEN + rowAddr(MZ_Y + MZ_H * 3 + 1) + c0 + 3
+    if (c0 != MZ_X) { a = a - 4 }
+    var ca: uint16 = a - SCREEN + COLRAM
+    if (n == 0) { poke(a, 32) }
+    else { poke(a, 48 + n)  poke(ca, 7) }
+}
