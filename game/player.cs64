@@ -26,6 +26,8 @@ var py: byte[2] = [144, 144]
 var pdir: byte[2] = [0, 0]               // aktuálny smer pohybu
 var pface: byte[2] = [D_UP, D_UP]        // smer pohľadu (sprite)
 var pstep: byte[2] = [0, 0]              // počítadlo pixelov pre animáciu
+var pcx: byte[2] = [0, 10]               // posledná bunka, ktorej stredom hráč prešiel (cieľ AI)
+var pcy: byte[2] = [5, 5]
 var tunShut: byte = 0                    // > 0 = tunely zavalené (odpočet snímok)
 
 // Dá sa z bunky (cx, cy) ísť smerom d? Brána: z nej len hore; do nej sa už nevracia.
@@ -77,6 +79,7 @@ function movePlayer(p: byte, joy: byte): void {
     if (atCenter) {
         var cx: byte = x / CELL
         var cy: byte = y / CELL
+        if (cy < MZ_H) { pcx[p] = cx  pcy[p] = cy }
         // tunel: zo stredu krajnej bunky ďalej von → druhá strana
         if (cy == TUN_ROW && tunShut == 0) {
             if (cx == 0 && d == D_LEFT && (want == D_LEFT || want == 0)) {

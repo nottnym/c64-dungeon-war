@@ -389,6 +389,19 @@ zastavenie pri stene, tunel vľavo → vpravo, zavalenie a odpočet.</li>
 <li>Koniec kódu <code>$1F90</code> (≈ 6 KB, z toho ≈ 3 KB <code>std:mux2</code>).</li>
 </ul>
 
+
+<h3>Krok 3 – slizáky s AI (2026-11-16)</h3>
+<ul>
+<li><code>monster.cs64</code>: poloha ako bunka + posun k ďalšiemu stredu (pohyb <b>bez delenia</b>), rýchlosť cez
+akumulátor zlomkov pixela (slizák 0,5 px/snímok), AI v strede bunky: z voľných smerov bez otočenia späť ten najbližší
+k bunke hráča, 1/4 náhodne (8-bit LFSR <code>rand8</code>), v slepej uličke späť. Príšery nepoužívajú tunely ani brány.</li>
+<li>6 slizákov z pevných miest objavenia; sprity 0 = hráč, 1–6 = príšery.</li>
+<li>Overené priamo v C64U Code (vetva <code>261116-mux2-screen</code>): pohyb a zbiehanie k hráčovi, <code>mux2</code>
+7 spritov, <code>dropped = 0</code>, <code>wasLate = 0</code>.</li>
+<li>Koniec kódu <code>$28E2</code> (+2,4 KB).</li>
+<li>Zatiaľ chýba: príšery sa navzájom prekrývajú (riešiť v kroku 5 – rozostupy pri objavovaní a v AI).</li>
+</ul>
+
 <h3>Zistenia o C#64 (zoznam námetov pre kompilátor a knižnice)</h3>
 <table>
 <tr><th>#</th><th>Zistenie</th><th>Stav</th></tr>
@@ -403,6 +416,8 @@ test <code>Mux2_SetScreen_MovesSpritePointersToOtherScreen</code>, dokumentácia
 (16 iterácií); bajtová verzia by bola ~2× rýchlejšia, pri konštante deliteľa ešte viac.</td><td>námet</td></tr>
 <tr><td>5</td><td><code>for … in</code> nejde cez poľový parameter; konštantné pole sa dá odovzdať len do
 <code>readonly</code> parametra.</td><td>poznámka</td></tr>
+<tr><td>7</td><td><code>step</code> je kľúčové slovo (<code>for … step</code>) a <code>rnd</code> vyhradené meno vstavanej
+funkcie – nedajú sa použiť ako mená premenných/funkcií; chybové hlášky sú zrozumiteľné.</td><td>poznámka</td></tr>
 <tr><td>6</td><td><code>cs64build</code> bez <code>memoryLayout</code> hlási kolíziu tabuliek <code>mux2</code> ($CE00) so
 string-heapom ($C800–$CFFF) – iné predvolenie než v aplikácii.</td><td>poznámka</td></tr>
 </table>

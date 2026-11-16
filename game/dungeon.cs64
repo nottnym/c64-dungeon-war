@@ -9,7 +9,7 @@
 //    $C000-$CBFF  premenné C#64, halda $CC00-$CDFF
 //    $CE00-$CFFF  tabuľky std:mux2 (nič iné tam nesmie byť)
 //
-//  Krok 2: hráč 1 (joystick port 2) – pohyb po mriežke, steny, tunely, vstupná brána; sprity cez std:mux2.
+//  Krok 3: 6 slizákov s AI (k najbližšiemu hráčovi, 1/4 náhodne); sprity 0 = hráč 1, 1-6 = príšery (std:mux2).
 // ============================================================================
 
 memoryLayout { vars = $C000  heap = $CC00  heapLimit = $CE00 }
@@ -20,6 +20,7 @@ uses Mux2 = "std:mux2"
 uses "layout.cs64"
 uses "maze.cs64"
 uses "player.cs64"
+uses "monster.cs64"
 
 // Texty v hre sú po anglicky (rozhodnutie 2026-11-16).
 const T_P1:    byte[] = screenCodes("PLAYER 1 000000")
@@ -84,8 +85,12 @@ function initSprites(): void {
     poke($D025, 0)
     poke($D026, 1)
     Mux2.setScreen(SCREEN)
-    Mux2.setCount(1)
+    Mux2.setCount(1 + MAX_MON)
     Mux2.setSprite(0, spriteX(0), spriteY(0), COL_P1, playerShape(0))
+    for i = 0 to MAX_MON - 1 {
+        spawnMonster(i, M_SLIME)
+        Mux2.setSprite(1 + i, 48 + (uint16)monX(i), 67 + monY(i), COL_SLIME, monShape(i))
+    }
     Mux2.update()                          // prvý commit pred start()
     sei()
     irq(frameIrq)
@@ -111,6 +116,10 @@ function main(): void {
         movePlayer(0, Joy.read2())         // 2. logika
         updateTunnels()
         Mux2.setSprite(0, spriteX(0), spriteY(0), COL_P1, playerShape(0))
+        for i = 0 to MAX_MON - 1 {
+            moveMonster(i)
+            Mux2.setSprite(1 + i, 48 + (uint16)monX(i), 67 + monY(i), COL_SLIME, monShape(i))
+        }
         Mux2.update()                      // 3. commit – posledný zápis snímku
     }
 }
