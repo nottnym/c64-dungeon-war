@@ -9,15 +9,17 @@
 //    $C000-$CBFF  premenné C#64, halda $CC00-$CDFF
 //    $CE00-$CFFF  tabuľky std:mux2 (nič iné tam nesmie byť)
 //
-//  Krok 1: vlastná znaková sada, kreslenie podlažia z dát, stavový riadok. Fire (port 2) = ďalšie podlažie (test).
+//  Krok 2: hráč 1 (joystick port 2) – pohyb po mriežke, steny, tunely, vstupná brána; sprity cez std:mux2.
 // ============================================================================
 
 memoryLayout { vars = $C000  heap = $CC00  heapLimit = $CE00 }
 
 uses Vic = "std:vic"
 uses Joy = "std:joy"
+uses Mux2 = "std:mux2"
 uses "layout.cs64"
 uses "maze.cs64"
+uses "player.cs64"
 
 // Texty v hre sú po anglicky (rozhodnutie 2026-11-16).
 const T_P1:    byte[] = screenCodes("PLAYER 1 000000")
@@ -76,6 +78,21 @@ function showLevel(): void {
     drawStatus()
 }
 
+// Sprity: multicolor, spoločné farby $D025 čierna (obrys), $D026 biela; std:mux2 s obrazovkou $8400.
+function initSprites(): void {
+    poke($D01C, $FF)
+    poke($D025, 0)
+    poke($D026, 1)
+    Mux2.setScreen(SCREEN)
+    Mux2.setCount(1)
+    Mux2.setSprite(0, spriteX(0), spriteY(0), COL_P1, playerShape(0))
+    Mux2.update()                          // prvý commit pred start()
+    sei()
+    irq(frameIrq)
+    Mux2.start()
+    cli()
+}
+
 function main(): void {
     includeAt(A_CHARSET, "assets/charset")
     includeAt(A_SPRITES, "assets/sprites")
@@ -88,12 +105,12 @@ function main(): void {
     initVideo()
     clearScreen()
     showLevel()
+    initSprites()
     while (true) {
-        // test: fire na porte 2 prepne podlažie (pustenie → ďalšie stlačenie)
-        while (!Joy.fire(Joy.read2())) { }
-        level = level + 1
-        if (level == N_LEVELS) { level = 0 }
-        showLevel()
-        while (Joy.fire(Joy.read2())) { }
+        Mux2.waitFrame()                   // 1. začiatok snímku
+        movePlayer(0, Joy.read2())         // 2. logika
+        updateTunnels()
+        Mux2.setSprite(0, spriteX(0), spriteY(0), COL_P1, playerShape(0))
+        Mux2.update()                      // 3. commit – posledný zápis snímku
     }
 }

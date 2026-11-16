@@ -376,5 +376,38 @@ presunie sa do <code>DW GFX</code>.</li>
 <li>Projekt v C64U Code: <code>tools/make_sql_project.py</code> (SQL Server / PostgreSQL), lokálne ID 35.</li>
 <li>Stĺpiky v rohoch buniek bez stien vyzerali ako osamelé bodky – vypustené.</li>
 </ul>
+
+<h3>Krok 2 – hráč, pohyb po mriežke, tunely (2026-11-16)</h3>
+<ul>
+<li><code>player.cs64</code>: pozícia v pixeloch od rohu bludiska, smer sa mení len v strede bunky (otočenie späť
+kedykoľvek), steny podľa dát podlažia, vstupná brána (z nej len hore), tunel prenesie na druhú stranu a na 3 s sa
+zavalí; animácia každých 8 px podľa smeru.</li>
+<li>Sprity cez <code>std:mux2</code> (protokol <code>waitFrame → logika → update</code>), multicolor, spoločné farby
+čierna/biela.</li>
+<li>Overené vo vstavanom emulátore (D64 nahratý na stránke Emulátor, virtuálny joystick port 2): výstup z brány, pohyb,
+zastavenie pri stene, tunel vľavo → vpravo, zavalenie a odpočet.</li>
+<li>Koniec kódu <code>$1F90</code> (≈ 6 KB, z toho ≈ 3 KB <code>std:mux2</code>).</li>
+</ul>
+
+<h3>Zistenia o C#64 (zoznam námetov pre kompilátor a knižnice)</h3>
+<table>
+<tr><th>#</th><th>Zistenie</th><th>Stav</th></tr>
+<tr><td>1</td><td><code>std:mux2</code> mal ukazovatele spritov napevno na <code>$07F8</code> – nefungoval s obrazovkou mimo
+<code>$0400</code> (VIC banka 2).</td><td><b>Opravené</b> v C64U-Code: <code>Mux2.setScreen(addr)</code> (operand IRQ jadra),
+test <code>Mux2_SetScreen_MovesSpritePointersToOtherScreen</code>, dokumentácia.</td></tr>
+<tr><td>2</td><td>Lokálne premenné a parametre funkcií, ktoré DFE vyhodí, stále zaberajú RAM (pridanie nepoužitej
+<code>setScreen</code> posunulo globály <code>mux2-demo</code> o 4 B).</td><td>námet</td></tr>
+<tr><td>3</td><td>Porovnania bajtov v podmienkach typu <code>a &amp;&amp; (b &amp; 2) == 0</code> sa prekladajú 16-bitovo cez
+<code>acc</code> a dočasné bunky (desiatky inštrukcií na jedno porovnanie) – <code>canGo</code> má stovky bajtov.</td><td>námet</td></tr>
+<tr><td>4</td><td><code>x % 24</code> a <code>x / 24</code> pre <code>byte</code> volajú 16-bitové <code>rt_DivMod16</code>
+(16 iterácií); bajtová verzia by bola ~2× rýchlejšia, pri konštante deliteľa ešte viac.</td><td>námet</td></tr>
+<tr><td>5</td><td><code>for … in</code> nejde cez poľový parameter; konštantné pole sa dá odovzdať len do
+<code>readonly</code> parametra.</td><td>poznámka</td></tr>
+<tr><td>6</td><td><code>cs64build</code> bez <code>memoryLayout</code> hlási kolíziu tabuliek <code>mux2</code> ($CE00) so
+string-heapom ($C800–$CFFF) – iné predvolenie než v aplikácii.</td><td>poznámka</td></tr>
+</table>
+<div class="note">Testovanie: monitor vstavaného emulátora zastavuje CPU vždy v rovnakej fáze snímku – zápis premennej,
+ktorú hra v tej fáze práve spracúva (napr. smer hráča), sa prepíše. Vstup treba dávať joystickom (virtuálnym), monitorom len
+polohy a stav, ktorý sa v danej chvíli nemení.</div>
 </body>
 </html>
