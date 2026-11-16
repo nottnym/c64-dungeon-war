@@ -71,3 +71,62 @@ function showGateCount(c0: byte, n: byte): void {
     if (n == 0) { poke(a, 32) }
     else { poke(a, 48 + n)  poke(ca, 7) }
 }
+
+// ---------------------------------------------------------------------------
+//  Radar: 11 × 6 buniek ako 6 × 3 znaky (každý 2 × 2 bunky), riadky 21–23, stĺpce 17–22; prekresľujú sa len zmeny
+// ---------------------------------------------------------------------------
+const RAD_ROW: byte = 21
+const RAD_COL: byte = 17
+const C_RADAR: byte = 128                // + maska (bit 0 ĽH, 1 PH, 2 ĽD, 3 PD)
+const BIT4: byte[] = [1, 2, 4, 8]
+const T_RADAR_LBL: byte[] = screenCodes("RADAR")
+
+// Inkrementálne: prekreslí sa len znak, z ktorého/do ktorého príšera zmenila bunku (prepočet všetkých 18 znakov
+// každý snímok stál ~60 rastrov – meranie 2026-11-16).
+var mrx: byte[6] = [255, 255, 255, 255, 255, 255]   // bunka, v ktorej je príšera na radare (255 = nie je)
+var mry: byte[6] = [255, 255, 255, 255, 255, 255]
+
+function initRadar(): void {
+    for i = 0 to MAX_MON - 1 { mrx[i] = 255 }
+    for r = 0 to 2 {
+        var a: uint16 = SCREEN + rowAddr(RAD_ROW + r) + RAD_COL
+        for c = 0 to 5 { poke(a + c, C_RADAR)  poke(a - SCREEN + COLRAM + c, 1) }
+    }
+    var b: uint16 = SCREEN + rowAddr(RAD_ROW + 3) + RAD_COL
+    for i = 0 to 4 { poke(b + i, T_RADAR_LBL[i])  poke(b - SCREEN + COLRAM + i, 11) }
+}
+
+// Prekreslí znak radaru (kx, ky) podľa príšer, ktoré v ňom práve sú.
+function radarChar(kx: byte, ky: byte): void {
+    var m: byte = 0
+    var t: byte = 0
+    for j = 0 to MAX_MON - 1 {
+        if (mtype[j] != M_NONE) {
+            var cx: byte = mcx[j]
+            var cy: byte = mcy[j]
+            if ((cx >> 1) == kx && (cy >> 1) == ky) {
+                m = m | BIT4[(cx & 1) | ((cy & 1) << 1)]
+                if (mkind[j] > t) { t = mkind[j] }
+            }
+        }
+    }
+    var a: uint16 = SCREEN + rowAddr(RAD_ROW + ky) + RAD_COL + kx
+    poke(a, C_RADAR + m)
+    poke(a - SCREEN + COLRAM, T_RADAR[t])
+}
+
+function updateRadar(): void {
+    for i = 0 to MAX_MON - 1 {
+        var nx: byte = 255
+        var ny: byte = 255
+        if (mtype[i] != M_NONE) { nx = mcx[i]  ny = mcy[i] }
+        if (nx != mrx[i] || ny != mry[i]) {
+            var ox: byte = mrx[i]
+            var oy: byte = mry[i]
+            mrx[i] = nx
+            mry[i] = ny
+            if (ox != 255) { radarChar(ox >> 1, oy >> 1) }
+            if (nx != 255) { radarChar(nx >> 1, ny >> 1) }
+        }
+    }
+}

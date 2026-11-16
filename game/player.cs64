@@ -256,26 +256,9 @@ function fireArrow(p: byte): void {
 
 function moveArrow(p: byte): void {
     if (aon[p] == 0) { return }
-    var x: byte = ax[p]
-    var y: byte = ay[p]
-    var d: byte = adir[p]
-    for s = 1 to ARROW_SPEED {
-        var ocx: byte = CELL_OF[x]
-        var ocy: byte = CELL_OF[y]
-        if (d == D_UP) { y = y - 1 }
-        if (d == D_DOWN) { y = y + 1 }
-        if (d == D_LEFT) { x = x - 1 }
-        if (d == D_RIGHT) { x = x + 1 }
-        if (CELL_OF[x] != ocx || CELL_OF[y] != ocy) {
-            if (ocy >= MZ_H) {                              // z priechodu brány: hore áno, inak koniec (code review č. 1, 3)
-                if (d != D_UP) { aon[p] = 0  return }
-            } else {
-                if (!monCanGo(ocx, ocy, d)) { aon[p] = 0  return }
-            }
-        }
-    }
-    ax[p] = x
-    ay[p] = y
+    gX = ax[p]
+    gY = ay[p]
+    if (advance(adir[p], ARROW_SPEED)) { ax[p] = gX  ay[p] = gY } else { aon[p] = 0 }   // advance: monster.cs64
 }
 
 function arrowShape(p: byte): byte {

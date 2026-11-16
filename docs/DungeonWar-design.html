@@ -417,6 +417,42 @@ desiatkové číslice s prenosom (bez 16-bit), srdiečka životov, odpočet v br
 <li>Koniec kódu <code>$31A4</code> (+2,2 KB vrátane 256 B tabuľky); 8 logických spritov.</li>
 </ul>
 
+<h3>Krok 5 – kostlivce, tiene, radar, mapa vzdialeností (2026-11-16)</h3>
+<ul>
+<li>Typy príšer (tabuľky podľa typu: rýchlosť, sprite, farba, body 100/200/500, farba na radare), zloženie 4 podlaží
+(<code>LV_TYPES</code>), návrat príšery v jej type.</li>
+<li>Kostlivec: v strede bunky, keď vidí hráča v rovnej chodbe bez steny (<code>seesPlayer</code>), vystrelí (2 sloty
+striel príšer, 3 px/snímok, pauza 1,5 s); šíp aj strely zdieľajú <code>advance()</code>.</li>
+<li>Tieň: neviditeľný, zablysne sa na 1 s každé 3–4 s, viditeľný bližšie ako 3 bunky; ide podľa mapy vzdialeností
+(BFS po 66 bunkách) – prepočet len pri zmene bunky hráča.</li>
+<li>Príšery sa vyhýbajú bunke, v ktorej je alebo do ktorej mieri iná príšera (<code>occupied</code>).</li>
+<li>Radar 6 × 3 znaky pod bludiskom, farba podľa najnebezpečnejšej príšery v znaku; prekresľuje sa len zmenený znak.</li>
+<li>Ladenie: zápis n na <code>$02FF</code> cez monitor → nová hra na podlaží n. Meranie: <code>$02F4</code> = 1 → rastre po
+fázach v <code>$02F5–$02FB</code>; <code>$02FD/$02FE</code> = max. dĺžka snímku (/2).</li>
+<li>Overené v C64U Code (podlažie 4): typy a farby, neviditeľné tiene na radare a ich zablysnutia, výstrel kostlivca
+pri hráčovi v rovnakom stĺpci, 10 spritov bez vypadnutia.</li>
+<li>Koniec kódu <code>$42A6</code>.</li>
+</ul>
+
+<h3>Výkon – meranie a optimalizácia (2026-11-16)</h3>
+<p>Prvé meranie kroku 5: <code>wasLate</code> v 37 % snímkov (logika nestíhala 50 Hz). Rozpis po fázach (rastre od
+začiatku snímku, snímok = 312):</p>
+<table>
+<tr><th>fáza</th><th>pred</th><th>po</th><th>čo pomohlo</th></tr>
+<tr><td>štart (IRQ mux2, waitFrame)</td><td>36</td><td>36</td><td>–</td></tr>
+<tr><td>hráč</td><td>~9</td><td>~9</td><td>–</td></tr>
+<tr><td>príšery</td><td>~30</td><td>~44</td><td>+ výpočet polôh raz za snímok (<code>updateMonPos</code>)</td></tr>
+<tr><td>strely a zásahy</td><td>~30</td><td>~14</td><td>polohy z polí, <code>inline absDiff</code></td></tr>
+<tr><td>radar</td><td>~62</td><td>~14</td><td>inkrementálne prekresľovanie</td></tr>
+<tr><td>sprity</td><td>~106</td><td>~76</td><td>pamäť polohy/tvaru/farby, <code>setPos</code>/<code>setY</code> namiesto <code>setSprite</code></td></tr>
+<tr><td><code>Mux2.update()</code></td><td>~32</td><td>~38</td><td>–</td></tr>
+<tr><td><b>koniec typického snímku</b></td><td><b>~306</b></td><td><b>~232</b></td><td></td></tr>
+</table>
+<p>Ďalej: predpočítané voľné smery buniek (<code>open[66]</code>) namiesto 16-bitových testov stien (BFS aj AI),
+BFS len pri zmene bunky hráča, najviac 2 rozhodnutia AI za snímok. Výsledok: <code>wasLate</code> 2/60 (~3 %), ojedinelé
+špičky ~300–310 rastrov; sprity nevypadávajú. Ďalšie zrýchlenie (mapa obsadenosti buniek, lacnejšie rozhodovanie) v kroku 10.
+Všetko v čistom C#64 – bez <code>asm {}</code>.</p>
+
 <h3>Code review kroku 4 (nezávislý agent, 2026-11-16) – opravené</h3>
 <table>
 <tr><th>#</th><th>Nález</th><th>Oprava</th></tr>
@@ -451,6 +487,11 @@ test <code>Mux2_SetScreen_MovesSpritePointersToOtherScreen</code>, dokumentácia
 (16 iterácií); bajtová verzia by bola ~2× rýchlejšia, pri konštante deliteľa ešte viac.</td><td>námet</td></tr>
 <tr><td>5</td><td><code>for … in</code> nejde cez poľový parameter; konštantné pole sa dá odovzdať len do
 <code>readonly</code> parametra.</td><td>poznámka</td></tr>
+<tr><td>8</td><td>Volanie funkcie s parametrami je drahé (kopírovanie argumentov do slotov, návratová hodnota cez
+<code>acc</code> 16-bitovo); malé pomocné funkcie v horúcich slučkách treba dať <code>inline</code> alebo výsledky
+predpočítať do polí. Podmienky s bajtmi sa prekladajú 16-bitovo (pozri č. 3) – výrazne to zdražuje AI.</td><td>námet</td></tr>
+<tr><td>9</td><td><code>Mux2.setSprite</code> pre 10 spritov každý snímok ≈ 100 rastrov; knižnici by pomohla jedna funkcia
+„nastav všetko, ale prepočítaj len zmenené“ alebo lacnejší <code>setSprite</code>.</td><td>námet</td></tr>
 <tr><td>7</td><td><code>step</code> je kľúčové slovo (<code>for … step</code>) a <code>rnd</code> vyhradené meno vstavanej
 funkcie – nedajú sa použiť ako mená premenných/funkcií; chybové hlášky sú zrozumiteľné.</td><td>poznámka</td></tr>
 <tr><td>6</td><td><code>cs64build</code> bez <code>memoryLayout</code> hlási kolíziu tabuliek <code>mux2</code> ($CE00) so

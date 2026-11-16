@@ -1,25 +1,43 @@
 // ============================================================================
-//  Dungeon War – príšery: pohyb po mriežke, AI, objavovanie (dizajn kap. 3 a 12)
+//  Dungeon War – príšery: typy, pohyb po mriežke, AI, streľba kostlivcov, tiene, objavovanie (dizajn kap. 3 a 12)
 //  Poloha = bunka (mcx, mcy) + posun moff (0 = v strede bunky, inak pixely od stredu v smere mdir).
-//  Pohyb nepotrebuje delenie (na rozdiel od hráča, ktorý počíta % a / – porovnanie rýchlosti v kap. 19).
+//  Pohyb nepotrebuje delenie.
 // ============================================================================
 
 const MAX_MON: byte = 6
 const M_NONE: byte = 0
 const M_SLIME: byte = 1
+const M_SKEL: byte = 2
+const M_SHADE: byte = 3
 
-const SPR_SLIME: byte = 136              // slizák vpravo 8/9, vľavo 10/11, hore 12/13, dole 14/15 (128 + číslo)
-const COL_SLIME: byte = 13               // svetlozelená
+// vlastnosti podľa typu (index = typ)
+const T_SPEED:  byte[] = [0, 128, 160, 224]     // pixely za snímok × 256
+const T_SPRITE: byte[] = [0, 136, 144, 152]     // slizák 8–15, kostlivec 16–23, tieň 24–31 (128 + číslo)
+const T_COLOR:  byte[] = [0, 13, 15, 4]         // svetlozelená, svetlosivá, fialová
+const T_POINTS: byte[] = [0, 1, 2, 5]           // stovky bodov
+const T_RADAR:  byte[] = [0, 5, 1, 4]           // farba bodky na radare (hires znak → < 8)
+const COL_SLIME: byte = 13
 
-var mtype: byte[6] = [0, 0, 0, 0, 0, 0]
+// zloženie podlaží (4 × 6 príšer) – krok 7 doplní zásobu a ďalšie podlažia
+const LV_TYPES: byte[] = [
+    1, 1, 1, 1, 1, 1,
+    1, 1, 2, 1, 1, 2,
+    1, 2, 2, 1, 3, 1,
+    1, 2, 3, 2, 3, 1]
+
+var mtype: byte[6] = [0, 0, 0, 0, 0, 0]  // živý typ (0 = mŕtva)
+var mkind: byte[6] = [0, 0, 0, 0, 0, 0]  // typ, ktorý sa vráti po smrti
 var mcx:   byte[6] = [0, 0, 0, 0, 0, 0]
 var mcy:   byte[6] = [0, 0, 0, 0, 0, 0]
 var moff:  byte[6] = [0, 0, 0, 0, 0, 0]
 var mdir:  byte[6] = [0, 0, 0, 0, 0, 0]
 var mface: byte[6] = [0, 0, 0, 0, 0, 0]
-var mspd:  byte[6] = [0, 0, 0, 0, 0, 0]  // rýchlosť: pixely za snímok × 256 (128 = pol pixela)
-var macc:  byte[6] = [0, 0, 0, 0, 0, 0]  // akumulátor zlomkov pixela
+var mspd:  byte[6] = [0, 0, 0, 0, 0, 0]
+var macc:  byte[6] = [0, 0, 0, 0, 0, 0]
 var mstep: byte[6] = [0, 0, 0, 0, 0, 0]
+var mcool: byte[6] = [0, 0, 0, 0, 0, 0]  // kostlivec: snímky do ďalšieho výstrelu
+var mcloak: byte[6] = [0, 0, 0, 0, 0, 0] // tieň: odpočet do prepnutia viditeľnosti
+var mshow: byte[6] = [0, 0, 0, 0, 0, 0]  // tieň: 1 = práve viditeľný (zablysnutie)
 
 // miesta objavenia (bunky) – rohy a stred, ďaleko od brán
 const SPAWN_X: byte[] = [0, 10, 5, 2, 8, 5]
@@ -37,38 +55,90 @@ function rand8(): byte {                     // "rnd" je vstavaná funkcia
     return s
 }
 
+// Voľné smery z každej bunky (bity D_UP/D_DOWN/D_LEFT/D_RIGHT, bez tunelov a brán) – steny sa počas podlažia
+// nemenia, takže sa predpočítajú pri nahratí podlažia (computeOpen) a AI, BFS, šípy čítajú len tabuľku.
+var open: byte[66] = new byte[66]
+
+function computeOpen(): void {
+    var i: byte = 0
+    for cy = 0 to MZ_H - 1 {
+        for cx = 0 to MZ_W - 1 {
+            var m: byte = 0
+            if (cy > 0 && (cell[i - MZ_W] & 2) == 0) { m = m | D_UP }
+            if (cy < MZ_H - 1 && (cell[i] & 2) == 0) { m = m | D_DOWN }
+            if (cx > 0 && (cell[i - 1] & 1) == 0) { m = m | D_LEFT }
+            if (cx < MZ_W - 1 && (cell[i] & 1) == 0) { m = m | D_RIGHT }
+            open[i] = m
+            i = i + 1
+        }
+    }
+}
+
 // Príšera smie ísť z bunky smerom d? (bez tunelov a brán)
 function monCanGo(cx: byte, cy: byte, d: byte): bool {
     if (cy >= MZ_H) { return false }             // mimo bludiska (riadok brány) – nikdy nečítať za poľom cell
-    var i: byte = cy * MZ_W + cx
-    if (d == D_UP) {
-        if (cy == 0) { return false }
-        return (cell[i - MZ_W] & 2) == 0
-    }
-    if (d == D_DOWN) {
-        if (cy == MZ_H - 1) { return false }
-        return (cell[i] & 2) == 0
-    }
-    if (d == D_LEFT) {
-        if (cx == 0) { return false }
-        return (cell[i - 1] & 1) == 0
-    }
-    if (cx == MZ_W - 1) { return false }
-    return (cell[i] & 1) == 0
+    return (open[cy * MZ_W + cx] & d) != 0
 }
 
-function absDiff(a: byte, b: byte): byte {
+inline function absDiff(a: byte, b: byte): byte {      // inline: volá sa v horúcich slučkách
     if (a > b) { return a - b }
     return b - a
 }
 
-// AI v strede bunky: z voľných smerov (bez otočenia späť, ak je iná možnosť) najbližší k cieľu; 1/4 náhodne.
+// ---------------------------------------------------------------------------
+//  Mapa vzdialeností od hráča (BFS po 66 bunkách) – tiene idú najkratšou cestou
+// ---------------------------------------------------------------------------
+var dist: byte[66] = new byte[66]
+var bfsQ: byte[66] = new byte[66]
+
+function computeDist(tx: byte, ty: byte): void {
+    for i = 0 to 65 { dist[i] = 255 }
+    var t: byte = ty * MZ_W + tx
+    dist[t] = 0
+    bfsQ[0] = t
+    var head: byte = 0
+    var tail: byte = 1
+    while (head != tail) {
+        var c: byte = bfsQ[head]
+        head = head + 1
+        var nd: byte = dist[c] + 1
+        var o: byte = open[c]                    // voľné smery bunky (computeOpen)
+        var n: byte = 0
+        if ((o & D_UP) != 0) { n = c - MZ_W  if (dist[n] == 255) { dist[n] = nd  bfsQ[tail] = n  tail = tail + 1 } }
+        if ((o & D_DOWN) != 0) { n = c + MZ_W  if (dist[n] == 255) { dist[n] = nd  bfsQ[tail] = n  tail = tail + 1 } }
+        if ((o & D_LEFT) != 0) { n = c - 1  if (dist[n] == 255) { dist[n] = nd  bfsQ[tail] = n  tail = tail + 1 } }
+        if ((o & D_RIGHT) != 0) { n = c + 1  if (dist[n] == 255) { dist[n] = nd  bfsQ[tail] = n  tail = tail + 1 } }
+    }
+}
+
+// Je bunka (nx, ny) obsadená inou príšerou (stojí v nej alebo do nej mieri)?
+function occupied(self: byte, nx: byte, ny: byte): bool {
+    for j = 0 to MAX_MON - 1 {
+        if (j != self && mtype[j] != M_NONE) {
+            var jx: byte = mcx[j]
+            var jy: byte = mcy[j]
+            if (moff[j] != 0) {
+                var dj: byte = mdir[j]
+                if (dj == D_UP) { jy = jy - 1 }
+                if (dj == D_DOWN) { jy = jy + 1 }
+                if (dj == D_LEFT) { jx = jx - 1 }
+                if (dj == D_RIGHT) { jx = jx + 1 }
+            }
+            if (jx == nx && jy == ny) { return true }
+        }
+    }
+    return false
+}
+
+// AI v strede bunky: z voľných smerov (bez otočenia späť a bez obsadených buniek, ak je iná možnosť) najbližší
+// k cieľu – slizák/kostlivec podľa vzdialenosti v bunkách, tieň podľa mapy BFS; slizák/kostlivec 1/4 náhodne.
 function chooseDir(i: byte): byte {
     var cx: byte = mcx[i]
     var cy: byte = mcy[i]
     var back: byte = opposite(mdir[i])
     var tx: byte = pcx[0]
     var ty: byte = pcy[0]
+    var shade: bool = mkind[i] == M_SHADE
     var best: byte = 0
     var bestDist: byte = 255
     var n: byte = 0
@@ -76,23 +146,31 @@ function chooseDir(i: byte): byte {
     var d: byte = 1
     while (d < 16) {
         if (d != back && monCanGo(cx, cy, d)) {
-            cand = cand | d
-            n = n + 1
             var nx: byte = cx
             var ny: byte = cy
             if (d == D_UP) { ny = ny - 1 }
             if (d == D_DOWN) { ny = ny + 1 }
             if (d == D_LEFT) { nx = nx - 1 }
             if (d == D_RIGHT) { nx = nx + 1 }
-            var dist: byte = absDiff(nx, tx) + absDiff(ny, ty)
-            if (dist < bestDist) { bestDist = dist  best = d }
+            if (!occupied(i, nx, ny)) {
+                cand = cand | d
+                n = n + 1
+                var dd: byte = 0
+                if (shade) { dd = dist[ny * MZ_W + nx] } else { dd = absDiff(nx, tx) + absDiff(ny, ty) }
+                if (dd < bestDist) { bestDist = dd  best = d }
+            }
         }
         d = d << 1
     }
-    if (n == 0) { return back }                  // slepá ulička
-    // Hráč v bráne alebo mŕtvy → túlanie (inak by príšery čakali pri výstupe z brány); inak 1/4 náhodne.
+    if (n == 0) {                                // slepá ulička alebo všetko obsadené
+        if (monCanGo(cx, cy, back)) { return back }
+        return 0
+    }
+    // Hráč v bráne alebo mŕtvy → túlanie (inak by príšery čakali pri výstupe z brány).
     var wander: bool = pstate[0] != PS_ALIVE
-    if (n > 1 && (wander || rand8() < 64)) {
+    var r: byte = 64
+    if (shade) { r = 16 }
+    if (n > 1 && (wander || rand8() < r)) {
         var k: byte = rand8() & 3
         d = 1
         while (true) {
@@ -109,6 +187,7 @@ function chooseDir(i: byte): byte {
 
 function spawnMonster(i: byte, typ: byte): void {
     mtype[i] = typ
+    mkind[i] = typ
     mcx[i] = SPAWN_X[i]
     mcy[i] = SPAWN_Y[i]
     moff[i] = 0
@@ -116,15 +195,125 @@ function spawnMonster(i: byte, typ: byte): void {
     mface[i] = D_DOWN
     macc[i] = 0
     mstep[i] = 0
-    mspd[i] = 128                                // slizák: pol pixela za snímok
+    mspd[i] = T_SPEED[typ]
+    mcool[i] = 75
+    mcloak[i] = 150 + (rand8() & 63)
+    mshow[i] = 0
 }
 
+// ---------------------------------------------------------------------------
+//  Strely príšer (kostlivce): 2 sloty, 3 px/snímok, steny ako šíp hráča
+// ---------------------------------------------------------------------------
+const MAX_SHOT: byte = 2
+const SHOT_SPEED: byte = 3
+const SHOT_COOL: byte = 75               // 1,5 s
+
+var son: byte[2] = [0, 0]
+var sx: byte[2] = [0, 0]
+var sy: byte[2] = [0, 0]
+var sdir: byte[2] = [0, 0]
+
+// Vidí kostlivec v strede bunky hráča v rovnej chodbe? Vracia smer alebo 0.
+function seesPlayer(i: byte): byte {
+    if (pstate[0] != PS_ALIVE) { return 0 }
+    var cx: byte = mcx[i]
+    var cy: byte = mcy[i]
+    var tx: byte = pcx[0]
+    var ty: byte = pcy[0]
+    var d: byte = 0
+    if (cy == ty && cx != tx) {
+        d = D_RIGHT
+        if (tx < cx) { d = D_LEFT }
+        while (cx != tx) {
+            if (!monCanGo(cx, cy, d)) { return 0 }
+            if (d == D_RIGHT) { cx = cx + 1 } else { cx = cx - 1 }
+        }
+        return d
+    }
+    if (cx == tx && cy != ty) {
+        d = D_DOWN
+        if (ty < cy) { d = D_UP }
+        while (cy != ty) {
+            if (!monCanGo(cx, cy, d)) { return 0 }
+            if (d == D_DOWN) { cy = cy + 1 } else { cy = cy - 1 }
+        }
+        return d
+    }
+    return 0
+}
+
+function fireShot(i: byte, d: byte): bool {
+    for k = 0 to MAX_SHOT - 1 {
+        if (son[k] == 0) {
+            son[k] = 1
+            sx[k] = CELL_PX[mcx[i]]
+            sy[k] = CELL_PX[mcy[i]]
+            sdir[k] = d
+            return true
+        }
+    }
+    return false
+}
+
+// Posun strely/šípu o n pixelov so stenami (pozícia v gX, gY). Vracia false, ak narazil.
+var gX: byte = 0
+var gY: byte = 0
+function advance(d: byte, n: byte): bool {
+    for s = 1 to n {
+        var ocx: byte = CELL_OF[gX]
+        var ocy: byte = CELL_OF[gY]
+        if (d == D_UP) { gY = gY - 1 }
+        if (d == D_DOWN) { gY = gY + 1 }
+        if (d == D_LEFT) { gX = gX - 1 }
+        if (d == D_RIGHT) { gX = gX + 1 }
+        if (CELL_OF[gX] != ocx || CELL_OF[gY] != ocy) {
+            if (ocy >= MZ_H) {                              // z priechodu brány: hore áno, inak koniec
+                if (d != D_UP) { return false }
+            } else {
+                if (!monCanGo(ocx, ocy, d)) { return false }
+            }
+        }
+    }
+    return true
+}
+
+function moveShots(): void {
+    for k = 0 to MAX_SHOT - 1 {
+        if (son[k] != 0) {
+            gX = sx[k]
+            gY = sy[k]
+            if (advance(sdir[k], SHOT_SPEED)) { sx[k] = gX  sy[k] = gY } else { son[k] = 0 }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Pohyb, viditeľnosť, tvar
+// ---------------------------------------------------------------------------
+// Rozpočet AI rozhodnutí na snímok (meranie 2026-11-16: súbeh rozhodnutí viacerých príšer robil špičky > 1 snímok).
+// Príšera v strede bunky bez rozpočtu počká na ďalší snímok.
+var decBudget: byte = 2
+
 function moveMonster(i: byte): void {
+    if (mcool[i] != 0) { mcool[i] = mcool[i] - 1 }
+    if (mkind[i] == M_SHADE) {                   // zablysnutie: 1 s viditeľný každé 3–4 s
+        mcloak[i] = mcloak[i] - 1
+        if (mcloak[i] == 0) {
+            mshow[i] = mshow[i] ^ 1
+            if (mshow[i] != 0) { mcloak[i] = 50 } else { mcloak[i] = 150 + (rand8() & 63) }
+        }
+    }
+    if (moff[i] == 0 && decBudget == 0) { return }      // rozhodnutie až v ďalšom snímku
     var a: byte = macc[i] + mspd[i]
     var whole: bool = a < macc[i]                // prenos = celý pixel ("step" je kľúčové slovo)
     macc[i] = a
     if (!whole) { return }
-    if (moff[i] == 0) {                          // stred bunky → rozhodnutie
+    if (moff[i] == 0) {                          // stred bunky → rozhodnutie (a streľba kostlivca)
+        decBudget = decBudget - 1
+        if (mkind[i] == M_SKEL && mcool[i] == 0) {
+            var sd: byte = seesPlayer(i)
+            if (sd != 0 && fireShot(i, sd)) { mcool[i] = SHOT_COOL  mface[i] = sd }
+        }
         var d: byte = chooseDir(i)
         mdir[i] = d
         if (d == 0) { return }
@@ -156,6 +345,13 @@ function monY(i: byte): byte {
     return y
 }
 
+// Tieň je vidieť len pri zablysnutí alebo bližšie ako 3 bunky od hráča; ostatné príšery vždy.
+function monVisible(i: byte): bool {
+    if (mkind[i] != M_SHADE) { return true }
+    if (mshow[i] != 0) { return true }
+    return absDiff(mcx[i], pcx[0]) + absDiff(mcy[i], pcy[0]) < 3
+}
+
 function monShape(i: byte): byte {
     var f: byte = 0
     var d: byte = mface[i]
@@ -163,11 +359,20 @@ function monShape(i: byte): byte {
     if (d == D_UP) { f = 4 }
     if (d == D_DOWN) { f = 6 }
     if ((mstep[i] & 8) != 0) { f = f + 1 }
-    return SPR_SLIME + f
+    return T_SPRITE[mkind[i]] + f
+}
+
+function monColor(i: byte): byte { return T_COLOR[mkind[i]] }
+
+// Poloha príšery v pixeloch bludiska – raz za snímok do polí (zásahy, sprity ju len čítajú).
+var mxp: byte[6] = [0, 0, 0, 0, 0, 0]
+var myp: byte[6] = [0, 0, 0, 0, 0, 0]
+function updateMonPos(): void {
+    for i = 0 to MAX_MON - 1 { mxp[i] = monX(i)  myp[i] = monY(i) }
 }
 
 // ---------------------------------------------------------------------------
-//  Smrť a návrat príšer (krok 4)
+//  Smrť a návrat príšer
 // ---------------------------------------------------------------------------
 const BOOM_TIME: byte = 24
 const RESPAWN_TIME: byte = 150           // 3 s
@@ -201,12 +406,15 @@ function updateMonster(i: byte): void {
     if (mresp[i] == 1 && pstate[0] == PS_ALIVE &&
         absDiff(mcx[i], pcx[0]) + absDiff(mcy[i], pcy[0]) < SAFE_DIST) { return }   // code review č. 4
     mresp[i] = mresp[i] - 1
-    if (mresp[i] == 0) { spawnMonster(i, M_SLIME) }
+    if (mresp[i] == 0) { spawnMonster(i, mkind[i]) }
 }
 
-// Tvar spritu príšery: živá → animácia, výbuch → snímky výbuchu, inak 0 = skrytá.
+// Tvar spritu príšery: živá a viditeľná → animácia, výbuch → snímky výbuchu, inak 0 = skrytá.
 function monSprite(i: byte): byte {
-    if (mtype[i] != M_NONE) { return monShape(i) }
+    if (mtype[i] != M_NONE) {
+        if (monVisible(i)) { return monShape(i) }
+        return 0
+    }
     var t: byte = mboom[i]
     if (t == 0) {
         if (mresp[i] != 0 && mresp[i] <= BLINK_TIME && (mresp[i] & 4) != 0) { return monShape(i) }
@@ -217,3 +425,14 @@ function monSprite(i: byte): byte {
     return SPR_BOOM + 2
 }
 
+// Príšery podlažia podľa LV_TYPES.
+function spawnLevel(lv: byte): void {
+    var b: byte = lv * MAX_MON
+    for i = 0 to MAX_MON - 1 {
+        spawnMonster(i, LV_TYPES[b + i])
+        mboom[i] = 0
+        mresp[i] = 0
+    }
+    son[0] = 0
+    son[1] = 0
+}

@@ -4,24 +4,33 @@
 
 const HIT_ARROW: byte = 10               // šíp zasiahne príšeru, keď |dx| < 10 a |dy| < 10
 const HIT_BODY: byte = 14                // príšera zasiahne hráča, keď |dx| < 14 a |dy| < 14
+const HIT_SHOT: byte = 8                 // strela kostlivca zasiahne hráča
 
 function collide(): void {
     for p = 0 to 0 {                     // zatiaľ len hráč 1 (hráč 2 v kroku 6)
         var alive: bool = pstate[p] == PS_ALIVE && pinv[p] == 0
         for i = 0 to MAX_MON - 1 {
             if (mtype[i] != M_NONE) {
-                var mx: byte = monX(i)
-                var my: byte = monY(i)
+                var mx: byte = mxp[i]               // updateMonPos (raz za snímok)
+                var my: byte = myp[i]
                 if (aon[p] != 0 && absDiff(ax[p], mx) < HIT_ARROW && absDiff(ay[p], my) < HIT_ARROW) {
                     aon[p] = 0
+                    addScore(p, 3, T_POINTS[mkind[i]])   // 100 / 200 / 500 bodov (číslica stoviek)
                     killMonster(i)
-                    addScore(p, 3, 1)    // slizák 100 bodov (číslica stoviek)
                 } else {
                     if (alive && absDiff(px[p], mx) < HIT_BODY && absDiff(py[p], my) < HIT_BODY) {
                         killPlayer(p)
                         alive = false
                     }
                 }
+            }
+        }
+        // strely kostlivcov × hráč
+        for k = 0 to MAX_SHOT - 1 {
+            if (son[k] != 0 && alive && absDiff(sx[k], px[p]) < HIT_SHOT && absDiff(sy[k], py[p]) < HIT_SHOT) {
+                son[k] = 0
+                killPlayer(p)
+                alive = false
             }
         }
     }
