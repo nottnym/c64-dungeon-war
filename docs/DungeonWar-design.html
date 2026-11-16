@@ -102,6 +102,8 @@ radare a zblízka.</p>
 <ul>
 <li>Pohyb v 4 smeroch po chodbách, vždy <b>o jednu bunku</b>: v strede ďalšej bunky hráč pokračuje, len kým drží
 joystick v smere pohybu (alebo v inom voľnom smere), inak zastane (úprava 2026-11-16).</li>
+<li>Hráč stojaci čelom k stene sa pri joysticku do protismeru najprv len <b>otočí na mieste</b> (môže strieľať na
+opačnú stranu); pohyb začne pri ďalšom stlačení alebo pri držaní dlhšom ako 10 snímok (úprava 2026-11-16).</li>
 <li>Fire = šíp v smere pohľadu. Na obrazovke je najviac <b>1 šíp na hráča</b>; ďalší až po zásahu alebo náraze do steny.</li>
 <li>Nový hráč (štart alebo po smrti) čaká vo <b>vstupnej bráne</b> s odpočtom 5 s (číslice nad bránou). Vyjde po
 stlačení fire alebo po odpočte. Kým je v bráne, nedá sa zasiahnuť.</li>
@@ -483,6 +485,11 @@ Všetko v čistom C#64 – bez <code>asm {}</code>.</p>
 <p>Overené v C64U Code: QUEST OVER → nové stlačenie fire → nová hra, odpočet vedľa brány viditeľný, po výstupe sa
 hráč joystickom dole do brány nevráti. Koniec kódu <code>$329B</code>. Poznámka k hrateľnosti: slizáky zatiaľ hráča zabijú
 rýchlo – vyladí sa v kroku 10.</p>
+
+<h3>Otočenie na mieste pri stene (2026-11-16)</h3>
+<ul><li><code>player.cs64</code>: stojaci hráč čelom k stene + joystick do protismeru → len otočenie (<code>pturn</code>,
+10 snímok); pohyb pri ďalšom stlačení alebo dlhšom držaní. Overené: v bunke (4,0) otočenie doprava → doľava bez
+posunu, výstrel doľava, ďalšie stlačenie → posun o bunku.</li></ul>
 
 <h3>Úprava pohybu hráča (2026-11-16)</h3>
 <ul><li>Pohyb ide o jednu bunku; v jej strede pokračuje len pri držanom joysticku (aj cez tunel), inak zastane.

@@ -29,6 +29,10 @@ var pface: byte[2] = [D_UP, D_UP]        // smer pohľadu (sprite)
 var pstep: byte[2] = [0, 0]              // počítadlo pixelov pre animáciu
 var pcx: byte[2] = [0, 10]               // posledná bunka, ktorej stredom hráč prešiel (cieľ AI)
 var pcy: byte[2] = [5, 5]
+// Otočenie na mieste: hráč stojaci čelom k stene sa pri joysticku do protismeru najprv len otočí (môže strieľať
+// na druhú stranu); pohyb začne, až keď joystick drží ďalej TURN_HOLD snímok (úprava 2026-11-16).
+const TURN_HOLD: byte = 10
+var pturn: byte[2] = [0, 0]
 var tunShut: byte = 0                    // > 0 = tunely zavalené (odpočet snímok)
 
 // Dá sa z bunky (cx, cy) ísť smerom d? Brána: z nej len hore; do nej sa už nevracia.
@@ -98,6 +102,21 @@ function movePlayer(p: byte, joy: byte): void {
                 pcx[p] = 0
                 closeTunnels()
                 return
+            }
+        }
+        if (d == 0) {                                    // stojí v strede bunky
+            if (pturn[p] != 0) {                         // po otočení: pohyb až pri ďalej držanom smere
+                if (want != pface[p]) { pturn[p] = 0 }
+                else {
+                    pturn[p] = pturn[p] - 1
+                    if (pturn[p] != 0) { return }
+                }
+            } else {
+                if (want != 0 && want == opposite(pface[p]) && !canGo(cx, cy, pface[p])) {
+                    pface[p] = want                      // čelom k stene → len otočiť
+                    pturn[p] = TURN_HOLD
+                    return
+                }
             }
         }
         if (want != 0 && canGo(cx, cy, want)) { d = want }
@@ -182,6 +201,7 @@ function enterGate(p: byte): void {
 
 function leaveGate(p: byte): void {
     pstate[p] = PS_ALIVE
+    pturn[p] = 0
     pdir[p] = D_UP                       // vyjde o jednu bunku hore (ďalej podľa joysticku)
     py[p] = GATE_Y - 1                   // mimo stredu bunky – inak by ho pravidlo „len pri držanom joysticku“ zastavilo
     setGateBars(gateCol(p), false)
