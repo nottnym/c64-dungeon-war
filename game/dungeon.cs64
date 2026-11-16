@@ -19,10 +19,11 @@ uses Joy = "std:joy"
 uses "layout.cs64"
 uses "maze.cs64"
 
-const T_P1:    byte[] = screenCodes("HRAC 1 000000")
-const T_FLOOR: byte[] = screenCodes("PODLAZIE 01")
-const T_P2:    byte[] = screenCodes("HRAC 2 000000")
-const T_LOADERR: byte[] = screenCodes("CHYBA: DW LEVELS")
+// Texty v hre sú po anglicky (rozhodnutie 2026-11-16).
+const T_P1:    byte[] = screenCodes("PLAYER 1 000000")
+const T_FLOOR: byte[] = screenCodes("FLOOR 01")
+const T_P2:    byte[] = screenCodes("PLAYER 2 000000")
+const T_LOADERR: byte[] = screenCodes("LOAD ERROR: DW LEVELS")
 
 // VIC banka 2 ($8000), obrazovka $8400 ($D018 bity 4-7 = 1), znaky $8800 (bity 1-3 = 1), multicolor znaky.
 function initVideo(): void {
@@ -62,11 +63,11 @@ function printAt(row: byte, col: byte, readonly text: byte[], color: byte): void
 
 function drawStatus(): void {
     printAt(0, 0, T_P1, 5)
-    printAt(0, 14, T_FLOOR, 1)
-    printAt(0, 27, T_P2, 8)
+    printAt(0, 16, T_FLOOR, 1)
+    printAt(0, 25, T_P2, 7)                // text: farba < 8 (≥ 8 = multicolor znak)
     var n: byte = level + 1
-    poke(SCREEN + 23, 48 + n / 10)
-    poke(SCREEN + 24, 48 + n % 10)
+    poke(SCREEN + 22, 48 + n / 10)
+    poke(SCREEN + 23, 48 + n % 10)
 }
 
 function showLevel(): void {
@@ -81,7 +82,7 @@ function main(): void {
     if (!loadFile("DW LEVELS")) {
         initVideo()
         clearScreen()
-        printAt(12, 12, T_LOADERR, 2)
+        printAt(12, 9, T_LOADERR, 2)
         while (true) { }
     }
     initVideo()

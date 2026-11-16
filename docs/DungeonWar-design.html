@@ -97,7 +97,7 @@ radare a zblízka.</p>
 <table>
 <tr><th>Hráč</th><th>Postava</th><th>Farba</th><th>Ovládanie</th><th>Štart</th></tr>
 <tr><td>1</td><td>Bojovník so samostrelom</td><td>svetlozelená</td><td>joystick port 2</td><td>vstupná brána vľavo dole</td></tr>
-<tr><td>2</td><td>Lovkyňa so samostrelom</td><td>oranžová</td><td>joystick port 1</td><td>vstupná brána vpravo dole</td></tr>
+<tr><td>2</td><td>Lovkyňa so samostrelom</td><td>oranžová (text v stavovom riadku žltý – hires znak má len farby 0–7)</td><td>joystick port 1</td><td>vstupná brána vpravo dole</td></tr>
 </table>
 <ul>
 <li>Pohyb v 4 smeroch po chodbách; zatáčanie sa „prichytí“ na najbližšiu križovatku (tolerancia ±3 px), aby sa
@@ -151,9 +151,9 @@ občas neviditeľní</td></tr>
 </table>
 <ul>
 <li><b>Zrýchľovanie:</b> rýchlosť príšer rastie s časom na podlaží (každých 20 s jeden stupeň) a keď zostanú 1–2 príšery.</li>
-<li>Medzi podlažiami krátka obrazovka „PODLAŽIE n“ so skóre; každé 4. podlažie bonusové „pokladnica“ (zbieranie truhlíc
+<li>Medzi podlažiami krátka obrazovka „FLOOR n“ so skóre; každé 4. podlažie bonusové „pokladnica“ (zbieranie truhlíc
 na čas, bez príšer) – voliteľné, kap. 18.</li>
-<li>Koniec hry: obaja hráči bez životov → „KONIEC VÝPRAVY“, najvyššie skóre (v pamäti, voliteľne na disk).</li>
+<li>Koniec hry: obaja hráči bez životov → „QUEST OVER“, najvyššie skóre (v pamäti, voliteľne na disk).</li>
 </ul>
 
 <h2 id="body">6. Bodovanie a životy</h2>
@@ -166,7 +166,7 @@ na čas, bez príšer) – voliteľné, kap. 18.</li>
 
 <h2 id="obrazovka">7. Obrazovka a grafika</h2>
 <pre>
-riadok  0      HRÁČ 1  012300   PODLAŽIE 04   HRÁČ 2  004500
+riadok  0      PLAYER 1 012300  FLOOR 04  PLAYER 2 004500
 riadok  1      ♥♥♥                                     ♥♥
 riadky  2–19   bludisko 33 × 18 znakov (stĺpce 3–35)
 riadky 20–22   vstupné brány hráčov (bunka 3 × 3 znaky vľavo dole / vpravo dole)
@@ -214,7 +214,7 @@ polovica); triedenie podľa Y, 8 na riadok</td><td><code>std:mux2</code> (MAX 24
 <tr><td><code>monster.cs64</code></td><td>príšery, zlodej, boss, AI, zásoba podlažia, zrýchľovanie</td></tr>
 <tr><td><code>sprites.cs64</code></td><td>animácie, mapovanie na logické sprity <code>mux2</code></td></tr>
 <tr><td><code>sound.cs64</code></td><td>SFX interpret, napojenie hudby</td></tr>
-<tr><td><code>screens.cs64</code></td><td>titulka, „PODLAŽIE n“, koniec hry, najvyššie skóre</td></tr>
+<tr><td><code>screens.cs64</code></td><td>titulka, „FLOOR n“, koniec hry, najvyššie skóre</td></tr>
 </table>
 
 <h2 id="pamat">10. Rozloženie pamäte a disk</h2>
@@ -343,6 +343,7 @@ a kritické rutiny v <code>asm {}</code>.</li>
 <li>Najvyššie skóre sa ukladá na disk – <b>áno</b>.</li>
 <li>Prvú verziu znakovej sady a spritov <b>navrhne Claude</b> (zdroj ako text v <code>tools/</code> → BIN položky),
 neskôr ich používateľ prekreslí v editoroch C64U Code. Hudba tiež prvá verzia od Clauda.</li>
+<li>Všetky texty v hre sú <b>po anglicky</b> (mená v hre: SLIME, SKELETON, SHADE, THIEF, DEPTH GUARDIAN; dokumentácia a komentáre ostávajú po slovensky).</li>
 <li>Projekt v <code>C:\git\c64\Dungeon war</code>, vlastný git repozitár (v <code>C:\git\c64\.gitignore</code> výnimka
 ako Bruce Lee), neskôr vlastný repozitár na GitHube.</li>
 </ol>
