@@ -434,6 +434,21 @@ pri hráčovi v rovnakom stĺpci, 10 spritov bez vypadnutia.</li>
 <li>Koniec kódu <code>$42A6</code>.</li>
 </ul>
 
+<h3>Code review kroku 5 (nezávislý agent, 2026-11-16)</h3>
+<p>Bez nálezov vysokej závažnosti. Opravené:</p>
+<table>
+<tr><th>#</th><th>Nález</th><th>Oprava</th></tr>
+<tr><td>1</td><td>Popis „RADAR“ farbou 11 → VIC ho kreslil ako multicolor.</td><td>Farba 1 (hires text &lt; 8).</td></tr>
+<tr><td>2</td><td>Kostlivec sa pri streľbe nezastavil a mohol zabrať oba sloty striel (strela ~80 snímok, pauza 75).</td><td>Vlastník strely <code>sown</code> – najviac 1 strela na kostlivca; po výstrele otočený k hráčovi a jedno rozhodnutie stojí.</td></tr>
+<tr><td>3</td><td>Po tuneli mal hráč snímok starú bunku → neviditeľný tieň mohol zabiť bez zablysnutia.</td><td><code>pcx</code> sa nastaví hneď pri prechode.</td></tr>
+<tr><td>4</td><td>Nová hra z QUEST OVER: sprity príšer snímok na starých miestach; strely zamrznuté počas QUEST OVER.</td><td><code>updateMonPos</code> v <code>newGame</code>, strely sa pri konci hry zrušia.</td></tr>
+<tr><td>5</td><td>Otočka zo slepej uličky bez kontroly obsadenia – príšery sa prešli cez seba.</td><td>Pri obsadenej bunke počká.</td></tr>
+<tr><td>6</td><td>Zloženie 3. a 4. podlažia (<code>LV_TYPES</code>) nesedí s kap. 5 – tiene sú tam už teraz.</td><td><b>Dočasné</b> kvôli testovaniu tieňov; krok 7 zavedie zásobu podľa kap. 5.</td></tr>
+<tr><td>7</td><td>Meranie maxima ($02FD/$02FE) začínalo od náhodnej hodnoty.</td><td>Nulovanie pri štarte.</td></tr>
+</table>
+<p>Overené v C64U Code: popis radaru, podlažie 4, <code>dropped = 0</code>; <code>wasLate</code> kolíše 2–6/60 podľa súbehu
+rozhodnutí. Koniec kódu <code>$43BE</code>.</p>
+
 <h3>Výkon – meranie a optimalizácia (2026-11-16)</h3>
 <p>Prvé meranie kroku 5: <code>wasLate</code> v 37 % snímkov (logika nestíhala 50 Hz). Rozpis po fázach (rastre od
 začiatku snímku, snímok = 312):</p>

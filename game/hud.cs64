@@ -93,7 +93,7 @@ function initRadar(): void {
         for c = 0 to 5 { poke(a + c, C_RADAR)  poke(a - SCREEN + COLRAM + c, 1) }
     }
     var b: uint16 = SCREEN + rowAddr(RAD_ROW + 3) + RAD_COL
-    for i = 0 to 4 { poke(b + i, T_RADAR_LBL[i])  poke(b - SCREEN + COLRAM + i, 11) }
+    for i = 0 to 4 { poke(b + i, T_RADAR_LBL[i])  poke(b - SCREEN + COLRAM + i, 1) }   // hires text: farba < 8 (review č. 1)
 }
 
 // Prekreslí znak radaru (kx, ky) podľa príšer, ktoré v ňom práve sú.

@@ -89,11 +89,13 @@ function movePlayer(p: byte, joy: byte): void {
         if (cy == TUN_ROW && tunShut == 0) {
             if (cx == 0 && (want == D_LEFT || (held && d == D_LEFT))) {
                 px[p] = MAX_X
+                pcx[p] = MZ_W - 1                // bunka hneď po tuneli (review č. 3)
                 closeTunnels()
                 return
             }
             if (cx == MZ_W - 1 && (want == D_RIGHT || (held && d == D_RIGHT))) {
                 px[p] = 0
+                pcx[p] = 0
                 closeTunnels()
                 return
             }

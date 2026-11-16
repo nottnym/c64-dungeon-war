@@ -178,6 +178,7 @@ function newGame(): void {
     distX = 255                            // nové podlažie: mapu vzdialeností prepočítať
     initRadar()
     enterGate(0)
+    updateMonPos()                         // polohy spritov z novej hry hneď (review č. 4)
 }
 
 function main(): void {
@@ -196,6 +197,8 @@ function main(): void {
     var firePrev: bool = true
     var frame: byte = 0
     poke(DEBUG_LEVEL, 0)
+    poke(DBG_T, 0)                         // meranie od nuly (review č. 7)
+    poke(DBG_T + 1, 0)
     distX = 255
     while (true) {
         Mux2.waitFrame()                   // 1. začiatok snímku
@@ -239,6 +242,8 @@ function main(): void {
             updateRadar()
             mark(4)
             if (pstate[0] == PS_OUT) {
+                son[0] = 0                         // strely nezamrznú na obrazovke (review č. 4)
+                son[1] = 0
                 printAt(11, 15, T_QUEST_OVER, 2)
                 printAt(13, 15, T_PRESS_FIRE, 1)
                 over = true

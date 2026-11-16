@@ -163,7 +163,15 @@ function chooseDir(i: byte): byte {
         d = d << 1
     }
     if (n == 0) {                                // slepá ulička alebo všetko obsadené
-        if (monCanGo(cx, cy, back)) { return back }
+        if (back != 0 && monCanGo(cx, cy, back)) {
+            var bx: byte = cx
+            var by: byte = cy
+            if (back == D_UP) { by = by - 1 }
+            if (back == D_DOWN) { by = by + 1 }
+            if (back == D_LEFT) { bx = bx - 1 }
+            if (back == D_RIGHT) { bx = bx + 1 }
+            if (!occupied(i, bx, by)) { return back }   // inak počká (review č. 5: neprejsť cez inú príšeru)
+        }
         return 0
     }
     // Hráč v bráne alebo mŕtvy → túlanie (inak by príšery čakali pri výstupe z brány).
@@ -212,6 +220,7 @@ var son: byte[2] = [0, 0]
 var sx: byte[2] = [0, 0]
 var sy: byte[2] = [0, 0]
 var sdir: byte[2] = [0, 0]
+var sown: byte[2] = [0, 0]                // príšera, ktorá strelu vystrelila (najviac 1 strela na kostlivca)
 
 // Vidí kostlivec v strede bunky hráča v rovnej chodbe? Vracia smer alebo 0.
 function seesPlayer(i: byte): byte {
@@ -244,7 +253,11 @@ function seesPlayer(i: byte): byte {
 
 function fireShot(i: byte, d: byte): bool {
     for k = 0 to MAX_SHOT - 1 {
+        if (son[k] != 0 && sown[k] == i) { return false }   // ešte letí jeho strela (review č. 2)
+    }
+    for k = 0 to MAX_SHOT - 1 {
         if (son[k] == 0) {
+            sown[k] = i
             son[k] = 1
             sx[k] = CELL_PX[mcx[i]]
             sy[k] = CELL_PX[mcy[i]]
@@ -312,7 +325,12 @@ function moveMonster(i: byte): void {
         decBudget = decBudget - 1
         if (mkind[i] == M_SKEL && mcool[i] == 0) {
             var sd: byte = seesPlayer(i)
-            if (sd != 0 && fireShot(i, sd)) { mcool[i] = SHOT_COOL  mface[i] = sd }
+            if (sd != 0 && fireShot(i, sd)) {
+                mcool[i] = SHOT_COOL
+                mface[i] = sd                    // otočený k hráčovi a jedno rozhodnutie stojí (review č. 2)
+                mdir[i] = 0
+                return
+            }
         }
         var d: byte = chooseDir(i)
         mdir[i] = d
