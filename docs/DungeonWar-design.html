@@ -611,8 +611,8 @@ skóre, „PRESS FIRE TO START“, nápoveda k hráčovi 2 a pauze. Stavy v <cod
 (4 s „QUEST OVER“ s hudbou) → zadanie mena (ak sa hráč dostal do tabuľky; hráč 2 len ak sa pripojil) → titulka.</li>
 <li><b>Najvyššie skóre</b>: 5 × (6 číslic + 3 znaky) na <code>$9400</code>, súbor „DW SCORES“ (<code>tools/make_scores.py</code>,
 predvolene 5000–1000 „DW“). Nahrá sa pri štarte (<code>loadFile</code>), po novom zázname sa zapíše
-<code>saveFile(hsFile, "@0:DW SCORES,P,W", 8)</code> – <code>hsFile</code> je pole na pevnej adrese <code>$93FE</code> s hlavičkou PRG.
-Meno malými písmenami (<code>"@0:dw scores,p,w"</code>, review k9). Na zápis sa multiplexer zastaví, vráti sa KERNAL IRQ (<code>$EA31</code>, CIA), po zápise sa reťaz spustí znova. Zadanie mena
+zmazanie <code>S0:dw scores</code> cez kanál 15 a <code>saveFile(hsFile, "dw scores,p,w", bootDev)</code> (po review kroku 9) – <code>hsFile</code> je pole na pevnej adrese <code>$93FE</code> s hlavičkou PRG.
+Meno malými písmenami (review k9). Na zápis sa multiplexer zastaví, vráti sa KERNAL IRQ (<code>$EA31</code>, CIA), po zápise sa reťaz spustí znova. Zadanie mena
 joystickom hráča (hore/dole písmeno, fire ďalej). Pri chybe zápisu titulka ukáže „DISK ERROR – SCORES NOT SAVED“.</li>
 <li><b>Pauza</b> RUN/STOP (stĺpec 7 riadku 7 klávesnice, <code>$DC00</code> sa hneď vráti na <code>$FF</code>, aby klávesy nečítal
 joystick 1): „PAUSED“ v riadku 1, hlasitosť 0.</li>
@@ -651,6 +651,11 @@ overí, že skladba hrá (tóny s GATE: titulka 30, znelka 19, koniec 16).</td><
 <tr><td>11</td><td><code>make_sql_project.py</code> neprepísal položku pri zmene typu.</td><td>UPDATE podľa cesty, aj <code>SourceTypeId</code>.</td></tr>
 </table>
 <p>Po opravách koniec kódu <code>$80A3</code> (rezerva po <code>$8400</code> ~860 B).</p>
+<p><b>Druhé kolo review (2026-11-17):</b> opravy 1–8, 10, 11 potvrdené ako správne. Doplnené: na titulke len číslice od mechaniky
+(inak „?“, „IO“ = chyba prenosu pri odpovedi OK), kódy 00–19 sa berú ako OK; pauza mení stav len pri pustenom joysticku 2 (žiadna
+falošná hrana); namiesto <code>@0:</code> (známa chyba 1541) sa súbor najprv zmaže príkazom <code>S0:dw scores</code> cez kanál 15.
+Ponechané: neatomický zápis NMI vektora (okno pár cyklov), <code>$DC00</code> po zápise prepisuje aj hlavná slučka. Koniec kódu
+<code>$8126</code> (rezerva ~730 B).</p>
 
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
 <ul><li><code>player.cs64</code>: stojaci hráč čelom k stene + joystick do protismeru → len otočenie (<code>pturn</code>,

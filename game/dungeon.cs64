@@ -405,13 +405,15 @@ function main(): void {
                 afterGame(entryP + 1)
             }
         } else {
-            var stop: bool = joy == 0 && runStopDown()   // RUN/STOP = pauza; joystick 2 by vybral iné riadky (review k9 č. 5)
-            if (stop && !stopPrev) {
-                paused = !paused
-                soundPause(paused)
-                showPaused(paused)
+            if (joy == 0) {                        // RUN/STOP = pauza; s pohnutým joystickom 2 by sken vybral iné riadky
+                var stop: bool = runStopDown()     // (review k9 č. 5) – vtedy sa stav nemení, nevznikne falošná hrana
+                if (stop && !stopPrev) {
+                    paused = !paused
+                    soundPause(paused)
+                    showPaused(paused)
+                }
+                stopPrev = stop
             }
-            stopPrev = stop
             if (!paused) {
                 if (peek(DBG_REQ) != 0 && (frame & 7) != 0) { dbgOn = 1  poke(DBG_REQ, 0) }
                 mark(0)

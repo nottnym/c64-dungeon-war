@@ -47,18 +47,43 @@ function loadScores(): void {
 // (kanál 15, "00" = OK; $FF = kanál sa nedal otvoriť), [3] = RTI pre NMI (RUN/STOP + RESTORE).
 var dosIo: byte[4] @ $02A7
 var bootDev: byte = 8                    // mechanika, z ktorej sa hra spustila (review k9 č. 4)
+// Príkaz pre kanál 15 "S0:DW SCORES" (PETSCII bez shiftu) – zmazanie pred zápisom namiesto "@0:", ktoré má na 1541
+// známu chybu (môže poškodiť disk; review k9 kolo 2, č. 7).
+var dosCmd: byte[12] @ $02AB
+const DOS_SCRATCH: byte[] = [$53, $30, $3A, $44, $57, $20, $53, $43, $4F, $52, $45, $53]
+var saveCode: byte[2] = [0, 0]           // 2 znaky (kódy obrazovky) za hláškou o chybe zápisu
 
-// Pri štarte (pred prvým loadFile): zariadenie z $BA, NMI na RTI – KERNAL NMI pri STOP skáče cez ($A002), čo je
+// Pri štarte (pred nahratím skóre): zariadenie z $BA, NMI na RTI – KERNAL NMI pri STOP skáče cez ($A002), čo je
 // s vypnutým BASIC ROM RAM so spritmi (review k9 č. 7).
 function initSystem(): void {
     var d: byte = peek($BA)
     if (d < 8) { d = 8 }
     bootDev = d
     dosIo[3] = $40
+    for i = 0 to 11 { dosCmd[i] = DOS_SCRATCH[i] }
     sei()
     poke($0318, $AA)
     poke($0319, $02)
     cli()
+}
+
+// Zmaže "DW SCORES" (OPEN 15,dev,15,"S0:DW SCORES" / CLOSE) – ak súbor nie je, mechanika len hlási „01“.
+function scratchScores(): void {
+    dosIo[0] = bootDev
+    asm {
+        lda #12
+        ldx #$AB
+        ldy #$02
+        jsr $FFBD
+        lda #15
+        ldx $02A7
+        ldy #15
+        jsr $FFBA
+        jsr $FFC0
+        jsr $FFCC
+        lda #15
+        jsr $FFC3
+    }
 }
 
 // Prečíta odpoveď mechaniky z kanála 15 (SETLFS 15,dev,15 / SETNAM "" / OPEN / CHKIN / 2× CHRIN / CLRCHN / CLOSE).
@@ -105,12 +130,23 @@ function saveScores(): bool {
     poke($0315, $EA)
     poke($DC0D, $81)
     cli()
-    saveFile(hsFile, "@0:dw scores,p,w", bootDev)
-    var ok: bool = ioResult() == 0
+    scratchScores()
+    saveFile(hsFile, "dw scores,p,w", bootDev)
+    var io: byte = ioResult()
     readDosStatus()                            // ioResult nevidí chyby DOS-u (ochrana, plný disk…) – review k9 č. 3
-    if (dosIo[1] != 48 || dosIo[2] != 48) { ok = false }
-    poke($DC00, $FF)                           // KERNAL sken klávesnice nechá $DC00 = $7F (review k9 č. 5)
+    // Kód 00–19 = OK/informácia, 20+ = chyba. Na titulku: číslice od mechaniky, inak „?“; pri chybe zápisu s odpoveďou
+    // OK „IO“ (review k9 kolo 2, č. 1–2).
+    var d1: byte = dosIo[1]
+    var d2: byte = dosIo[2]
+    var dosOk: bool = d1 == 48 || d1 == 49
+    var ok: bool = io == 0 && dosOk
+    saveCode[0] = 63
+    saveCode[1] = 63
+    if (d1 >= 48 && d1 <= 57) { saveCode[0] = d1 }
+    if (d2 >= 48 && d2 <= 57) { saveCode[1] = d2 }
+    if (io != 0 && dosOk) { saveCode[0] = 9  saveCode[1] = 15 }
     sei()
+    poke($DC00, $FF)                           // KERNAL sken klávesnice nechá $DC00 = $7F (review k9 č. 5) – po sei
     irq(frameIrq)
     Mux2.start()
     cli()
@@ -173,13 +209,10 @@ function showTitle(): void {
     printAt(22, 10, T_START, 1)
     printAt(23, 3, T_JOIN2, 3)
     printAt(24, 13, T_PAUSEK, 6)
-    if (saveErr) {                                 // + kód mechaniky (2 číslice, "??" = kanál 15 nedostupný)
+    if (saveErr) {                                 // + kód mechaniky (2 číslice; „??“ = bez odpovede, „IO“ = chyba prenosu)
         printAt(0, 3, T_SAVEERR, 2)
-        var c1: byte = dosIo[1]
-        var c2: byte = dosIo[2]
-        if (c1 == $FF) { c1 = 63  c2 = 63 }
-        poke(SCREEN + 34, c1)
-        poke(SCREEN + 35, c2)
+        poke(SCREEN + 34, saveCode[0])
+        poke(SCREEN + 35, saveCode[1])
         poke(COLRAM + 34, 2)
         poke(COLRAM + 35, 2)
     }
