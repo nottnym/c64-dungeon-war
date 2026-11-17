@@ -207,7 +207,7 @@ function showTitle(): void {
     printAt(13, 10, T_L3, 4)
     printAt(16, 10, T_L4, 7)
     printAt(19, 10, T_L5, 2)
-    drawScores(6, 24)                          // blok legenda + tabuľka: stĺpce 4–36, medzi nimi 1 stĺpec
+    drawScores(6, 25)                          // tabuľka v stĺpcoch 25–37 (úprava 2026-11-17)
     printAt(22, 10, T_START, 1)
     printAt(23, 3, T_JOIN2, 3)
     printAt(24, 13, T_PAUSEK, 6)
@@ -222,19 +222,19 @@ function showTitle(): void {
 }
 
 // Legenda príšer na titulke: sprity 1–6 (golem 2 polovice, stĺpce 4–9), text od stĺpca 10; ostatné skryté.
-// Poloha v súradniciach putSprite: x = 8·stĺpec − 24, y = 8·riadok − 23 (sprite vystredený na riadok textu).
+// Poloha v súradniciach putSprite: x = 8·stĺpec − 24 (− 2 px, úprava 2026-11-17), y = 8·riadok − 23 (vystredené na riadok).
 // putSprite je inline (12× za snímok v hre) – na titulke jedna neinline kópia namiesto 8 rozbalení (krok 9: +1 KB).
 function titleSpr(n: byte, x: byte, y: byte, col: byte, shape: byte): void { putSprite(n, x, y, col, shape) }
 
 function drawTitleSprites(frame: byte): void {
     var f: byte = (frame >> 3) & 1
     titleSpr(0, 0, 0, 0, 0)
-    titleSpr(1, 24, LEG_ROW[0] * 8 - 23, T_COLOR[M_SLIME], T_SPRITE[M_SLIME] + f)
-    titleSpr(2, 24, LEG_ROW[1] * 8 - 23, T_COLOR[M_SKEL], T_SPRITE[M_SKEL] + f)
-    titleSpr(3, 24, LEG_ROW[2] * 8 - 23, T_COLOR[M_SHADE], T_SPRITE[M_SHADE] + f)
-    titleSpr(4, 24, LEG_ROW[3] * 8 - 23, T_COLOR[M_THIEF], T_SPRITE[M_THIEF] + f)
-    titleSpr(5, 8, LEG_ROW[4] * 8 - 23, T_COLOR[M_BOSS], T_SPRITE[M_BOSS])
-    titleSpr(6, 32, LEG_ROW[4] * 8 - 23, T_COLOR[M_BOSS], T_SPRITE[M_BOSS] + 1)
+    titleSpr(1, 22, LEG_ROW[0] * 8 - 23, T_COLOR[M_SLIME], T_SPRITE[M_SLIME] + f)
+    titleSpr(2, 22, LEG_ROW[1] * 8 - 23, T_COLOR[M_SKEL], T_SPRITE[M_SKEL] + f)
+    titleSpr(3, 22, LEG_ROW[2] * 8 - 23, T_COLOR[M_SHADE], T_SPRITE[M_SHADE] + f)
+    titleSpr(4, 22, LEG_ROW[3] * 8 - 23, T_COLOR[M_THIEF], T_SPRITE[M_THIEF] + f)
+    titleSpr(5, 6, LEG_ROW[4] * 8 - 23, T_COLOR[M_BOSS], T_SPRITE[M_BOSS])
+    titleSpr(6, 30, LEG_ROW[4] * 8 - 23, T_COLOR[M_BOSS], T_SPRITE[M_BOSS] + 1)
     for n = 7 to N_SPRITES - 1 { titleSpr(n, 0, 0, 0, 0) }
 }
 
