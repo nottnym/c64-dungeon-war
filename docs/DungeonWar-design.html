@@ -763,7 +763,11 @@ o 3 px ďalej od otvoru, aby východ nevyzeral ako uzáver. Zápis cez polia na 
 <li><b>Rámik radaru:</b> tenký modrý obrys miestnosti okolo bodiek (hires znaky 88–95; vodorovne ~5 px od bodiek – tesnejšia
 čiara by v poslednom stĺpci zdieľala farbu znaku s bodkou príšery), nápis „RADAR“ naľavo od rámika. Kreslenie radaru cez polia
 na pevnej adrese riadkov 20–24 – kód sa tým zmenšil.</li>
-<li>Test: steny brán a rámik radaru v emulátore, ostatné overil hráč. Koniec kódu <code>$81DF</code> (rezerva 545 B).</li>
+<li><b>Titulka – pulzujúce najvyššie skóre:</b> 5 riadkov tabuľky prechádza farebná vlna tmavomodrá – svetlomodrá – svetlosivá – biela –
+svetlosivá – svetlomodrá – tmavomodrá (<code>pulseScores</code>, krok každé 4 snímky, vlna nadol). Titulka beží bez multicolor znakov
+(<code>$D016</code> bit 4), aby text mohol mať farby 8–15; <code>beginIntro</code> multicolor zapne. Farby cez zdieľané polia na pevnej adrese
+(<code>colRowsA/B</code>, aj steny bočných brán).</li>
+<li>Test: steny brán, rámik radaru a vlna na titulke v emulátore, ostatné overil hráč. Koniec kódu <code>$82AA</code> (rezerva 342 B).</li>
 </ul>
 
 <h3>Code review opráv po hraní (nezávislý agent, 2026-11-17) – opravené</h3>

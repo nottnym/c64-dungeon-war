@@ -266,6 +266,7 @@ function newGame(f: byte): void {
 // Úvod podlažia: „FLOOR nn“ alebo „TREASURY“, sprity skryté (INTRO_TIME snímok).
 var introTimer: byte = 0
 function beginIntro(): void {
+    setMulticolor(true)                    // titulka beží bez multicolor znakov (pulseScores)
     clearRows(2, 24)
     hideAll = true
     introTimer = INTRO_TIME
@@ -417,6 +418,7 @@ function main(): void {
         tickBorder()                               // krok 12.1: červený okraj po smrti strážcu (aj počas úvodu)
         if (state == ST_TITLE) {
             drawTitleSprites(frame)
+            pulseScores(frame)                 // krok 12.1: farebná vlna na najvyššom skóre
             if (press) {
                 newGame(1)
                 state = ST_INTRO

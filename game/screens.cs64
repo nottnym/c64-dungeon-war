@@ -197,7 +197,34 @@ function drawScores(row: byte, col: byte): void {
     }
 }
 
+// Pulzujúci farebný prechod na 5 riadkoch najvyššieho skóre (krok 12.1). Titulka beží bez multicolor znakov
+// ($D016 bit 4 = 0), aby text mohol mať aj farby 8–15 (svetlomodrá, svetlosivá); hra ho zapne v beginIntro.
+const HS_GRAD: byte[] = [6, 14, 15, 1, 15, 14, 6]   // tmavomodrá – svetlomodrá – svetlosivá – biela – … – tmavomodrá
+var hsPhase: byte = 0
+const HS_OFS: byte[] = [25, 105, 185, 25, 105]          // stĺpec 25 v riadkoch 8, 10, 12 (colRowsA) a 14, 16 (colRowsB)
+function setMulticolor(on: bool): void {
+    var v: byte = peek($D016) & $EF
+    if (on) { v = v | $10 }
+    poke($D016, v)
+}
+
+function pulseScores(frame: byte): void {
+    if ((frame & 3) != 0) { return }              // krok vlny každé 4 snímky
+    hsPhase = hsPhase + 1
+    if (hsPhase == 7) { hsPhase = 0 }
+    var g: byte = hsPhase
+    for k = 0 to HS_N - 1 {
+        var c: byte = HS_GRAD[g]
+        var o: byte = HS_OFS[k]
+        for i = 0 to 12 {
+            if (k < 3) { colRowsA[o + i] = c } else { colRowsB[o + i] = c }   // riadky 8, 10, 12 | 14, 16 (maze.cs64)
+        }
+        if (g == 0) { g = 6 } else { g = g - 1 }   // vlna ide nadol
+    }
+}
+
 function showTitle(): void {
+    setMulticolor(false)
     clearScreen()
     setMuxTotal(N_SPRITES)                     // titulka: sprity 1–6 (po hre mohlo ostať 10 a premiešané poradie)
     hideAll = false

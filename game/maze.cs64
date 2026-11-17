@@ -116,15 +116,16 @@ function setTunnels(open: bool): void {
 // Polia na pevnej adrese = riadky obrazovky/farieb 8 a 10 (indexovaný zápis namiesto 16-bitových adries – šetrí kód).
 var twScrA: byte[40] @ $8400 + (MZ_Y + TUN_ROW * 3) * 40
 var twScrB: byte[40] @ $8400 + (MZ_Y + TUN_ROW * 3 + 2) * 40
-var twColA: byte[40] @ $D800 + (MZ_Y + TUN_ROW * 3) * 40
-var twColB: byte[40] @ $D800 + (MZ_Y + TUN_ROW * 3 + 2) * 40
+// farby riadkov 8–13 a 14–16 (zdieľa aj pulzujúce najvyššie skóre na titulke – screens.cs64; polia sa nesmú prekrývať)
+var colRowsA: byte[240] @ $D800 + 8 * 40
+var colRowsB: byte[120] @ $D800 + 14 * 40
 function drawTunnelWalls(): void {
     for i = 0 to 3 {
         var c: byte = TW_COL[i]
         twScrA[c] = C_TUN_WALL                    // pás v strede riadku nad otvorom a pod ním (východ, nie uzáver)
         twScrB[c] = C_TUN_WALL
-        twColA[c] = COL_WALL
-        twColB[c] = COL_WALL
+        colRowsA[c] = COL_WALL                   // riadok 8 (MZ_Y + TUN_ROW * 3)
+        colRowsA[80 + c] = COL_WALL              // riadok 10
     }
 }
 const TW_COL: byte[] = [MZ_X - 2, MZ_X - 1, MZ_X + MZ_W * 3, MZ_X + MZ_W * 3 + 1]
