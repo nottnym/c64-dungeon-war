@@ -15,13 +15,20 @@ inline function near(a: byte, b: byte, lim: byte): bool {
     return d < lim
 }
 
+// Krok 11: v každom snímku len polovica príšer (0–2 / 3–5). Šíp (4 px/snímok) prejde za 2 snímky 8 px pri obdĺžniku
+// ±10 px, príšera najviac ~2 px – zásah sa nestratí, len môže prísť o snímok neskôr.
+var colHalf: byte = 0
 function collide(): void {
+    var h: byte = colHalf
+    colHalf = 3 - h
     for p = 0 to 1 {
         var alive: bool = false
         if (pstate[p] == PS_ALIVE) { if (pinv[p] == 0) { alive = true } }
         var ppx: byte = px[p]
         var ppy: byte = py[p]
-        for i = 0 to MAX_MON - 1 {
+        // hráč bez šípu, ktorý nežije (brána, výbuch, vonku, nezraniteľný), príšery netestuje (krok 11: s 1 hráčom
+        // bola druhá polovica slučky zbytočná)
+        if (alive || aon[p] != 0) { for i = h to h + 2 {
             if (mtype[i] != M_NONE) {
                 var mx: byte = mxp[i]               // updateMonPos (raz za snímok)
                 var my: byte = myp[i]
@@ -55,7 +62,7 @@ function collide(): void {
                     }
                 }
             }
-        }
+        } }
         // šíp hráča p × druhý hráč: zasiahnutý stratí život, strelec +1000
         var q: byte = 1 - p
         if (aon[p] != 0) {

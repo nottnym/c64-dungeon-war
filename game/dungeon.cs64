@@ -152,21 +152,23 @@ inline function putSprite(n: byte, x: byte, y: byte, col: byte, shape: byte): vo
         if (sprS[n] != 0) { Mux2.hide(n)  sprS[n] = 0 }
         return
     }
+    // Priamy zápis do polí std:mux2 (krok 11): setPos/setSprite počítajú 9. bit X 16-bitovo (~93 inštrukcií,
+    // ~6 rastrov na sprite a snímok). Tu bajtovo: X = 48 + x, 9. bit pri x >= 208. Každá zložka len pri zmene.
+    var fresh: bool = sprS[n] == 0               // zo skrytého → zapísať aj polohu
     if (shape != sprS[n] || col != sprC[n]) {
-        Mux2.setSprite(n, 48 + (uint16)x, 67 + y, col, shape)
+        Mux2.sptr[n] = shape
+        Mux2.scol[n] = col
         sprS[n] = shape
         sprC[n] = col
-        sprX[n] = x
-        sprY[n] = y
-        return
     }
-    if (x != sprX[n]) {
-        Mux2.setPos(n, 48 + (uint16)x, 67 + y)
+    if (fresh || x != sprX[n]) {
+        Mux2.sxlo[n] = x + 48
+        var hi: byte = 0
+        if (x >= 208) { hi = 1 }
+        Mux2.sxhi[n] = hi
         sprX[n] = x
-        sprY[n] = y
-        return
     }
-    if (y != sprY[n]) { Mux2.setY(n, 67 + y)  sprY[n] = y }
+    if (fresh || y != sprY[n]) { Mux2.sy[n] = y + 67  sprY[n] = y }
 }
 
 function drawSprites(): void {
@@ -204,6 +206,7 @@ function drawSprites(): void {
 // Hráč 2 sa pripojí (raz za hru) tlačidlom fire na joysticku 1.
 function joinP2(): void {
     p2Joined = true
+    Mux2.st[0] = N_SPRITES                 // krok 11: sprity hráča 2 (10, 11) späť do multiplexera
     printAt(1, 31, T_BLANK9, 1)
     plives[1] = 3
     showLives(1, 3)
@@ -242,6 +245,7 @@ function newGame(f: byte): void {
     pstate[1] = PS_OUT                     // hráč 2 sa pripojí tlačidlom fire na joysticku 1
     plives[1] = 0
     p2Joined = false
+    Mux2.st[0] = N_SPRITES - 2             // krok 11: bez hráča 2 multiplexer spracúva len 10 spritov (S_TOTAL)
     showLives(1, 0)
     printAt(1, 31, T_JOIN, 7)
     pfirePrev[0] = 1                       // fire držaný z obrazovky QUEST OVER nevyvedie hneď z brány
@@ -437,7 +441,7 @@ function main(): void {
                 moveArrow(1)
                 updateTunnels()
                 mark(1)
-                decBudget = 2
+                decBudget = 1                      // krok 11: najviac 1 rozhodnutie AI za snímok (predtým 2)
                 if (distChanged()) { bfsStart()  decBudget = 1 }    // mapa vzdialeností len pri zmene hráčov,
                 else { if (bfsBusy) { bfsStep()  decBudget = 1 } }  // počítaná po častiach (BFS_STEP buniek za snímok)
                 for i = 0 to MAX_MON - 1 { updateMonster(i) }
@@ -446,7 +450,7 @@ function main(): void {
                 moveShots()
                 collide()
                 mark(3)
-                updateRadar()
+                if ((frame & 1) == 0) { updateRadar() }   // krok 11: radar každý druhý snímok
                 updateItems()
                 updateDark()
                 mark(4)

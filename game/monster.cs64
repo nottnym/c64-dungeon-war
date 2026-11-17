@@ -115,7 +115,7 @@ function nearestPlayer(cx: byte, cy: byte): byte {
 // Rozložené do viacerých snímkov (meranie 2026-11-16: celé BFS naraz ~120 rastrov → oneskorené snímky pri 2 hráčoch):
 // bfsStart pripraví novú mapu v distN, bfsStep spracuje najviac BFS_STEP buniek za snímok a po dokončení ju skopíruje
 // do dist. Kým nie je hotová, tiene idú podľa predošlej mapy (stará je len pár snímkov).
-const BFS_STEP: byte = 16
+const BFS_STEP: byte = 8                 // krok 11: polovica práce za snímok (mapa hotová za ~9 snímok)
 var distN: byte[66] = new byte[66]
 var bfsHead: byte = 0
 var bfsTail: byte = 0
@@ -469,19 +469,6 @@ function moveMonster(i: byte): void {
     }
 }
 
-function monX(i: byte): byte {
-    var x: byte = CELL_PX[mcx[i]]
-    if (mdir[i] == D_RIGHT) { x = x + moff[i] }
-    if (mdir[i] == D_LEFT) { x = x - moff[i] }
-    return x
-}
-
-function monY(i: byte): byte {
-    var y: byte = CELL_PX[mcy[i]]
-    if (mdir[i] == D_DOWN) { y = y + moff[i] }
-    if (mdir[i] == D_UP) { y = y - moff[i] }
-    return y
-}
 
 // Tieň je vidieť len pri zablysnutí alebo bližšie ako 3 bunky od hráča; ostatné príšery vždy.
 // Kostlivec od 8. podlažia rovnako podľa svojho časovača (mshow). Strážca: namiesto zablysnutí je viditeľný po zásahu,
@@ -516,8 +503,20 @@ function monColor(i: byte): byte {
 // Poloha príšery v pixeloch bludiska – raz za snímok do polí (zásahy, sprity ju len čítajú).
 var mxp: byte[6] = [0, 0, 0, 0, 0, 0]
 var myp: byte[6] = [0, 0, 0, 0, 0, 0]
+// Bez volaní monX/monY (krok 11: 12 volaní s návratom cez 16-bit acc za snímok).
 function updateMonPos(): void {
-    for i = 0 to MAX_MON - 1 { mxp[i] = monX(i)  myp[i] = monY(i) }
+    for i = 0 to MAX_MON - 1 {
+        var x: byte = CELL_PX[mcx[i]]
+        var y: byte = CELL_PX[mcy[i]]
+        var o: byte = moff[i]
+        var d: byte = mdir[i]
+        if (d == D_RIGHT) { x = x + o }
+        if (d == D_LEFT) { x = x - o }
+        if (d == D_DOWN) { y = y + o }
+        if (d == D_UP) { y = y - o }
+        mxp[i] = x
+        myp[i] = y
+    }
 }
 
 // ---------------------------------------------------------------------------
