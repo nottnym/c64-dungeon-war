@@ -1,0 +1,138 @@
+// ============================================================================
+//  Dungeon War – strážca hĺbky (boss 5., 10., 15. … podlažia, krok 8, dizajn kap. 3 a 12)
+//  Vždy v slote príšery 0; slot 1 ostáva prázdny – jeho logický sprite je pravá polovica golema (2 sprity vedľa seba).
+//  Pomalý prenasledovateľ cez mapu BFS, neviditeľný ako tieň (vidno ho zblízka, pri fakli, pri hode a 2 s po zásahu),
+//  hádže balvany (strela 2× pomalšia ako šíp), vydrží 8 zásahov, po každom zrýchli.
+// ============================================================================
+
+const BOSS_HP: byte = 8
+const BOSS_BOOST: byte = 20              // zrýchlenie za zásah (pixely za snímok × 256)
+const BOSS_SHOW: byte = 100              // 2 s viditeľný po zásahu
+const BOSS_START_SHOW: byte = 150        // 3 s viditeľný na začiatku podlažia
+const BOSS_THROW_SHOW: byte = 25         // 0,5 s viditeľný pri hode balvana
+const BOSS_FLASH: byte = 12              // biele zablysnutie po zásahu
+const BOSS_X: byte = 5                   // miesto objavenia: horný stred bludiska
+const BOSS_Y: byte = 0
+const HIT_BOSS_X: byte = 20              // golem je široký 2 sprity: šíp/dotyk vodorovne |dx| < 20
+const HIT_BOSS_Y: byte = 12
+const SPR_BOULDER: byte = 166            // balvan = sprite 38
+const COL_BOULDER: byte = 12
+const BOULDER_SPEED: byte = 2
+const BOSS_ROW: byte = 1                 // ukazovateľ zásahov v stavovom riadku
+const BOSS_COL: byte = 15
+const T_GUARD: byte[] = screenCodes("GUARD")
+
+var isBoss: bool = false
+var bossHp: byte = 0
+var bossBoost: byte = 0
+var bossShow: byte = 0
+var bossFlash: byte = 0
+
+// Príšery bossovho podlažia (setupFloor): strážca + 2 tiene, bez zásoby.
+function setupBoss(): void {
+    fInit[0] = M_BOSS
+    fInit[1] = M_NONE                    // pravá polovica golema
+    fInit[2] = M_NONE
+    fInit[3] = M_SHADE
+    fInit[4] = M_SHADE
+    fInit[5] = M_NONE
+    resN = 0
+    bossHp = BOSS_HP
+    bossBoost = 0
+    bossShow = BOSS_START_SHOW
+    bossFlash = 0
+}
+
+// Po spawnFloor: strážca na horný stred bludiska.
+function placeBoss(): void {
+    mcx[0] = BOSS_X
+    mcy[0] = BOSS_Y
+    claimCell(0, BOSS_Y * MZ_W + BOSS_X)
+}
+
+// Ukazovateľ zásahov: „GUARD“ + bodky (znak radaru so všetkými 4 bodkami, červená).
+function showBossHp(): void {
+    var a: uint16 = SCREEN + rowAddr(BOSS_ROW) + BOSS_COL
+    var ca: uint16 = a - SCREEN + COLRAM
+    for i = 0 to 4 { poke(a + i, T_GUARD[i])  poke(ca + i, 2) }
+    for k = 0 to BOSS_HP - 1 {
+        var ch: byte = 32
+        if (k < bossHp) { ch = C_RADAR + 15 }
+        poke(a + 6 + k, ch)
+        poke(ca + 6 + k, 2)
+    }
+}
+
+// Zmaže stred riadku 1 (ukazovateľ strážcu z predošlého podlažia).
+function clearBossHp(): void {
+    var a: uint16 = SCREEN + rowAddr(BOSS_ROW) + BOSS_COL
+    for i = 0 to 13 { poke(a + i, 32) }
+}
+
+// Zásah šípom hráča p: −1 život strážcu, zviditeľnenie a zrýchlenie; posledný zásah = 2500 bodov.
+function hitBoss(p: byte): void {
+    bossHp = bossHp - 1
+    showBossHp()
+    if (bossHp == 0) {
+        award(p, 2, 2)                   // 2000
+        award(p, 3, 5)                   // + 500
+        killMonster(0)
+        return
+    }
+    bossShow = BOSS_SHOW
+    bossFlash = BOSS_FLASH
+    bossBoost = bossBoost + BOSS_BOOST
+    mspd[0] = speedOf(M_BOSS)
+}
+
+// Časovače viditeľnosti (moveMonster, raz za snímok).
+function tickBoss(): void {
+    if (bossShow != 0) { bossShow = bossShow - 1 }
+    if (bossFlash != 0) { bossFlash = bossFlash - 1 }
+}
+
+// Sprite so 16-bitovou polohou X (ľavá polovica golema môže byť vľavo od bludiska) – inak ako putSprite v dungeon.cs64.
+function putWide(n: byte, x: uint16, y: byte, col: byte, shape: byte): void {
+    if (shape == 0) {
+        if (sprS[n] != 0) { Mux2.hide(n)  sprS[n] = 0 }
+        return
+    }
+    var xl: byte = (byte)x
+    if (shape != sprS[n] || col != sprC[n]) {
+        Mux2.setSprite(n, x, 67 + y, col, shape)
+        sprS[n] = shape
+        sprC[n] = col
+        sprX[n] = xl
+        sprY[n] = y
+        return
+    }
+    if (xl != sprX[n]) {
+        Mux2.setPos(n, x, 67 + y)
+        sprX[n] = xl
+        sprY[n] = y
+        return
+    }
+    if (y != sprY[n]) { Mux2.setY(n, 67 + y)  sprY[n] = y }
+}
+
+// Golem = logické sprity 1 a 2 (sloty príšer 0 a 1), polovice o 12 px vľavo/vpravo od polohy príšery; pri chôdzi
+// sa kolíše o 1 px. Výbuch na oboch polovicách.
+function drawBoss(): void {
+    var x: uint16 = 36 + (uint16)mxp[0]
+    var y: byte = myp[0]
+    var col: byte = monColor(0)
+    var s0: byte = 0
+    var s1: byte = 0
+    if (mtype[0] != M_NONE) {
+        if (monVisible(0)) {
+            s0 = T_SPRITE[M_BOSS]
+            s1 = s0 + 1
+            if ((mstep[0] & 8) != 0) { y = y + 1 }
+        }
+    } else {
+        s0 = monSprite(0)
+        s1 = s0
+    }
+    putWide(1, x, y, col, s0)
+    putWide(2, x + 24, y, col, s1)
+}

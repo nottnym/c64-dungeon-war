@@ -10,18 +10,20 @@ const M_SLIME: byte = 1
 const M_SKEL: byte = 2
 const M_SHADE: byte = 3
 const M_THIEF: byte = 4                 // zlodej pokladu (krok 7)
+const M_BOSS: byte = 5                  // strážca hĺbky (krok 8, boss.cs64)
 
 // vlastnosti podľa typu (index = typ)
-const T_SPEED:  byte[] = [0, 128, 160, 224, 255]     // pixely za snímok × 256
-const T_SPRITE: byte[] = [0, 136, 144, 152, 160]     // slizák 8–15, kostlivec 16–23, tieň 24–31, zlodej 32–33
-const T_COLOR:  byte[] = [0, 13, 15, 4, 7]           // svetlozelená, svetlosivá, fialová, žltá
-const T_POINTS: byte[] = [0, 1, 2, 5, 10]            // stovky bodov (zlodej 1000)
-const T_RADAR:  byte[] = [0, 5, 1, 4, 7]             // farba bodky na radare (hires znak → < 8)
+const T_SPEED:  byte[] = [0, 128, 160, 224, 255, 96] // pixely za snímok × 256
+const T_SPRITE: byte[] = [0, 136, 144, 152, 160, 162] // slizák 8–15, kostlivec 16–23, tieň 24–31, zlodej 32–33, golem 34–35
+const T_COLOR:  byte[] = [0, 13, 15, 4, 7, 12]       // svetlozelená, svetlosivá, fialová, žltá, sivá
+const T_POINTS: byte[] = [0, 1, 2, 5, 10, 25]        // stovky bodov (zlodej 1000, strážca 2500 – hitBoss)
+const T_RADAR:  byte[] = [0, 5, 1, 4, 7, 2]          // farba bodky na radare (hires znak → < 8)
 
 // Rýchlosť typu + zrýchlenie podlažia (floor.cs64), najviac 255; zlodej vždy najrýchlejší.
 function speedOf(t: byte): byte {
     if (t == M_THIEF) { return 255 }
     var s: byte = T_SPEED[t]
+    if (t == M_BOSS) { s = s + bossBoost }       // strážca zrýchľuje po každom zásahu
     var b: byte = speedBonus
     if (b > 255 - s) { return 255 }
     return s + b
@@ -205,7 +207,7 @@ function chooseDir(i: byte): byte {
         if (cx >= 5) { tx = MZ_W - 1 }
         ty = TUN_ROW
     }
-    var shade: bool = mkind[i] == M_SHADE
+    var shade: bool = mkind[i] == M_SHADE || mkind[i] == M_BOSS   // tieň a strážca podľa mapy BFS
     var best: byte = 0
     var bestDist: byte = 255
     var n: byte = 0
@@ -245,6 +247,7 @@ function chooseDir(i: byte): byte {
     var wander: bool = tp == 255
     var r: byte = 64
     if (shade) { r = 16 }
+    if (mkind[i] == M_BOSS) { r = 8 }
     if (thief) { r = 24 }
     if (n > 1 && (wander || rand8() < r)) {
         var k: byte = rand8() & 3
@@ -290,6 +293,7 @@ var sx: byte[2] = [0, 0]
 var sy: byte[2] = [0, 0]
 var sdir: byte[2] = [0, 0]
 var sown: byte[2] = [0, 0]                // príšera, ktorá strelu vystrelila (najviac 1 strela na kostlivca)
+var sbig: byte[2] = [0, 0]                // 1 = balvan strážcu (pomalší, iný sprite)
 
 // Vidí kostlivec niektorého živého hráča v rovnej chodbe? Vracia smer alebo 0.
 function seesPlayer(i: byte): byte {
@@ -338,6 +342,8 @@ function fireShot(i: byte, d: byte): bool {
             sx[k] = CELL_PX[mcx[i]]
             sy[k] = CELL_PX[mcy[i]]
             sdir[k] = d
+            sbig[k] = 0
+            if (mkind[i] == M_BOSS) { sbig[k] = 1 }
             return true
         }
     }
@@ -371,7 +377,9 @@ function moveShots(): void {
         if (son[k] != 0) {
             gX = sx[k]
             gY = sy[k]
-            if (advance(sdir[k], SHOT_SPEED)) { sx[k] = gX  sy[k] = gY } else { son[k] = 0 }
+            var sp: byte = SHOT_SPEED
+            if (sbig[k] != 0) { sp = BOULDER_SPEED }
+            if (advance(sdir[k], sp)) { sx[k] = gX  sy[k] = gY } else { son[k] = 0 }
         }
     }
 }
@@ -385,6 +393,7 @@ var decBudget: byte = 2
 
 function moveMonster(i: byte): void {
     if (mcool[i] != 0) { mcool[i] = mcool[i] - 1 }
+    if (mkind[i] == M_BOSS) { tickBoss() }
     if (mkind[i] == M_SHADE) {                   // zablysnutie: 1 s viditeľný každé 3–4 s
         mcloak[i] = mcloak[i] - 1
         if (mcloak[i] == 0) {
@@ -406,10 +415,15 @@ function moveMonster(i: byte): void {
     if (!whole) { return }
     if (moff[i] == 0) {                          // stred bunky → rozhodnutie (a streľba kostlivca)
         decBudget = decBudget - 1
-        if (mkind[i] == M_SKEL && mcool[i] == 0) {
+        var mk: byte = mkind[i]
+        if ((mk == M_SKEL || mk == M_BOSS) && mcool[i] == 0) {
             var sd: byte = seesPlayer(i)
             if (sd != 0 && fireShot(i, sd)) {
                 mcool[i] = SHOT_COOL
+                if (mk == M_BOSS) {              // strážca: balvan každé 2–3 s, pri hode na chvíľu viditeľný
+                    mcool[i] = 100 + (rand8() & 63)
+                    if (bossShow < BOSS_THROW_SHOW) { bossShow = BOSS_THROW_SHOW }
+                }
                 mface[i] = sd                    // otočený k hráčovi a jedno rozhodnutie stojí (review č. 2)
                 mdir[i] = 0
                 return
@@ -453,10 +467,13 @@ function monY(i: byte): byte {
 }
 
 // Tieň je vidieť len pri zablysnutí alebo bližšie ako 3 bunky od hráča; ostatné príšery vždy.
+// Strážca rovnako, ale namiesto zablysnutí je viditeľný po zásahu, pri hode a na začiatku podlažia (bossShow).
 function monVisible(i: byte): bool {
-    if (mkind[i] != M_SHADE) { return true }
+    var k: byte = mkind[i]
+    if (k != M_SHADE && k != M_BOSS) { return true }
     if (torchTicks != 0) { return true }         // fakľa odhalí tiene
-    if (mshow[i] != 0) { return true }
+    if (k == M_SHADE) { if (mshow[i] != 0) { return true } }
+    else { if (bossShow != 0) { return true } }
     var p: byte = nearestPlayer(mcx[i], mcy[i])
     if (p == 255) { return false }
     return absDiff(mcx[i], pcx[p]) + absDiff(mcy[i], pcy[p]) < 3
@@ -473,7 +490,10 @@ inline function monShape(i: byte): byte {              // inline: volá sa pre k
     return T_SPRITE[mkind[i]] + f
 }
 
-function monColor(i: byte): byte { return T_COLOR[mkind[i]] }
+function monColor(i: byte): byte {
+    if (mkind[i] == M_BOSS && bossFlash != 0) { return 1 }     // strážca po zásahu bielo zabliká
+    return T_COLOR[mkind[i]]
+}
 
 // Poloha príšery v pixeloch bludiska – raz za snímok do polí (zásahy, sprity ju len čítajú).
 var mxp: byte[6] = [0, 0, 0, 0, 0, 0]
@@ -555,8 +575,9 @@ function spawnFloor(): void {
     for i = 0 to MAX_MON - 1 {
         mboom[i] = 0
         mresp[i] = 0
-        if (isBonus) { mtype[i] = M_NONE  mkind[i] = M_NONE } else { spawnMonster(i, fInit[i]) }
+        if (isBonus || fInit[i] == M_NONE) { mtype[i] = M_NONE  mkind[i] = M_NONE } else { spawnMonster(i, fInit[i]) }
     }
+    if (isBoss && !isBonus) { placeBoss() }
     son[0] = 0
     son[1] = 0
 }

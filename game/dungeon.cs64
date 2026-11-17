@@ -9,6 +9,7 @@
 //    $C000-$CBFF  premenné C#64, halda $CC00-$CDFF
 //    $CE00-$CFFF  tabuľky std:mux2 (nič iné tam nesmie byť)
 //
+//  Krok 8: strážca hĺbky (boss.cs64) na 5., 10., … podlaží.
 //  Krok 7: priebeh podlaží (floor.cs64) – zásoba príšer, zlodej, truhlice, fakle, temné podlažie, pokladnica.
 //  Krok 6: hráč 2 (joystick port 1, pripojí sa tlačidlom fire), vzájomné zásahy. Sprity: 0 hráč 1, 1-6 príšery, 7 šíp 1,
 //  8-9 strely príšer, 10 hráč 2, 11 šíp 2.
@@ -27,6 +28,7 @@ uses "monster.cs64"
 uses "hud.cs64"
 uses "combat.cs64"
 uses "floor.cs64"
+uses "boss.cs64"
 
 // Texty v hre sú po anglicky (rozhodnutie 2026-11-16).
 const T_P1:    byte[] = screenCodes("PLAYER 1 000000")
@@ -169,14 +171,18 @@ function drawSprites(): void {
     var sh: byte = 0
     if (pstate[0] != PS_OUT) { sh = playerSprite(0) }
     putSprite(0, px[0], py[0], COL_P1, sh)
-    for i = 0 to MAX_MON - 1 { putSprite(1 + i, mxp[i], myp[i], monColor(i), monSprite(i)) }
+    var i0: byte = 0
+    if (isBoss && mkind[0] == M_BOSS) { drawBoss()  i0 = 2 }   // golem = sprity 1 a 2 (boss.cs64)
+    for i = i0 to MAX_MON - 1 { putSprite(1 + i, mxp[i], myp[i], monColor(i), monSprite(i)) }
     for k = 0 to MAX_SHOT - 1 {
         sh = 0
+        var sc: byte = 15
         if (son[k] != 0) {
             sh = SPR_ARROW_H
             if (sdir[k] == D_UP || sdir[k] == D_DOWN) { sh = SPR_ARROW_V }
+            if (sbig[k] != 0) { sh = SPR_BOULDER  sc = COL_BOULDER }
         }
-        putSprite(SPR_SHOT0 + k, sx[k], sy[k], 15, sh)
+        putSprite(SPR_SHOT0 + k, sx[k], sy[k], sc, sh)
     }
     sh = 0
     if (aon[0] != 0) { sh = arrowShape(0) }
@@ -242,6 +248,7 @@ function beginIntro(): void {
     clearRows(2, 24)
     hideAll = true
     introTimer = INTRO_TIME
+    clearBossHp()                          // ukazovateľ strážcu nepatrí do úvodu ďalšieho podlažia
     if (isBonus) { printAt(11, 16, T_TREASURY, 7) }
     else {
         printAt(11, 16, T_FLOOR_N, 1)
@@ -268,6 +275,7 @@ function startFloor(): void {
     drawMaze()
     drawStatus()
     if (!isBonus) { setupFloor(floorNo) }
+    if (isBoss) { showBossHp() }
     spawnFloor()
     clearItems()
     thiefState = THIEF_NONE

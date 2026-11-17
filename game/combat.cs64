@@ -26,18 +26,25 @@ function collide(): void {
                 var mx: byte = mxp[i]               // updateMonPos (raz za snímok)
                 var my: byte = myp[i]
                 var hit: bool = false
+                var hx: byte = HIT_ARROW                 // strážca je široký 2 sprity (boss.cs64)
+                var hy: byte = HIT_ARROW
+                var bx: byte = HIT_BODY
+                if (mkind[i] == M_BOSS) { hx = HIT_BOSS_X  hy = HIT_BOSS_Y  bx = HIT_BOSS_X }
                 if (aon[p] != 0) {
-                    if (near(ax[p], mx, HIT_ARROW)) {
-                        if (near(ay[p], my, HIT_ARROW)) {
+                    if (near(ax[p], mx, hx)) {
+                        if (near(ay[p], my, hy)) {
                             hit = true
                             aon[p] = 0
-                            award(p, 3, T_POINTS[mkind[i]])      // 100 / 200 / 500 / 1000 bodov (floor.cs64)
-                            killMonster(i)
+                            if (mkind[i] == M_BOSS) { hitBoss(p) }
+                            else {
+                                award(p, 3, T_POINTS[mkind[i]])  // 100 / 200 / 500 / 1000 bodov (floor.cs64)
+                                killMonster(i)
+                            }
                         }
                     }
                 }
                 if (!hit && alive && mkind[i] != M_THIEF) {   // zlodej je bonusový cieľ – dotykom nezabíja
-                    if (near(ppx, mx, HIT_BODY)) {
+                    if (near(ppx, mx, bx)) {
                         if (near(ppy, my, HIT_BODY)) {
                             killPlayer(p)
                             alive = false

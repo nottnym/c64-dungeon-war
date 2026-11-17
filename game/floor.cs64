@@ -19,6 +19,8 @@ function setupFloor(f: byte): void {
     var s: byte = M_SLIME
     var k: byte = M_SKEL
     var h: byte = M_SHADE
+    resIdx = 0
+    if (isBoss) { setupBoss()  return }          // 5., 10., … – strážca hĺbky + 2 tiene (boss.cs64)
     if (f == 1) {
         for i = 0 to 5 { fInit[i] = s }
         fRes[0] = k  fRes[1] = k
@@ -330,10 +332,10 @@ function floorLayout(): void {
     while (n >= N_LEVELS) { n = n - N_LEVELS  block = block + 1 }
     loadLevel(n, (block & 1) != 0)
     isDark = false
-    if (!isBonus && (floorNo & 3) == 0) {
-        isDark = true
-        var t: byte = floorNo
-        while (t >= 5) { t = t - 5 }
-        if (t == 0) { isDark = false }                  // každé 5. podlažie je strážca hĺbky (krok 8)
-    }
+    isBoss = false
+    if (isBonus) { return }
+    var t: byte = floorNo
+    while (t >= 5) { t = t - 5 }
+    if (t == 0) { isBoss = true  return }               // každé 5. podlažie je strážca hĺbky (krok 8), nie temné
+    if ((floorNo & 3) == 0) { isDark = true }
 }

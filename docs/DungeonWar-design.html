@@ -550,6 +550,29 @@ za ~0,7 s, teraz ~4 s; zlodej dotykom nezabíja (bonusový cieľ); na temnom pod
 bodky prezrádzali tvar bludiska.</li>
 </ul>
 
+<h3>Krok 8 – strážca hĺbky (2026-11-17, čiastočne odskúšané v C64U Code)</h3>
+<ul>
+<li><code>boss.cs64</code>: golem v slote príšery 0; slot 1 ostáva prázdny – jeho logický sprite je pravá polovica golema
+(sprity 34/35 vedľa seba, ±12 px od polohy príšery, <code>putWide</code> so 16-bitovým X, lebo ľavá polovica v stĺpci 0
+siaha pred bludisko). Na podlaží 5, 10, 15 … (<code>isBoss</code>, nikdy temné ani pokladnica) golem + 2 tiene (sloty 3, 4),
+bez zásoby.</li>
+<li>Pohyb: prenasleduje cez mapu BFS ako tieň (náhodne len 8/256), rýchlosť 96 + 20 za každý zásah + zrýchlenie podlažia.</li>
+<li>Viditeľnosť ako tieň (radar červený, zblízka &lt; 3 bunky, fakľa) – namiesto zablysnutí: 3 s na začiatku podlažia,
+2 s po zásahu (s bielym zablysnutím), 0,5 s pri hode balvana.</li>
+<li>Balvan: strela príšery so <code>sbig</code> = 1 (sprite 38, 2 px/snímok = polovica šípu), keď vidí hráča v rovnej chodbe,
+každé 2–3 s.</li>
+<li>8 zásahov (ukazovateľ „GUARD“ + 8 bodiek v riadku 1), zásah šípom ±20 × ±12 px, dotyk ±20 × ±14 px (hráč v susednej
+bunke za stenou je 24 px ďaleko). Posledný zásah 2500 bodov (2000 + 500 cez <code>award</code>, pri zlodejovom bonuse dvojnásobne),
+potom zlodej a bonus za podlažie ako inde.</li>
+<li>Koniec kódu <code>$6867</code> (predtým <code>$654C</code>, +~800 B).</li>
+<li>Test v C64U Code (2026-11-17, dočasné testovacie úpravy – štart na 5. podlaží, nesmrteľný hráč, bez tieňov,
+automatický zásah každé 3 s): obe polovice golema, viditeľnosť na začiatku, zblízka a po zásahu, ukazovateľ ubúda,
+golem sa po zásahoch zrýchľuje, výbuch, +2500, zlodej, bonus 250, „FLOOR 06“. Golem ide k hráčovi najkratšou cestou
+(na rozložení „Chodby“ okľukou ~14 buniek). Oprava po teste: ukazovateľ sa maže už v úvode ďalšieho podlažia.</li>
+<li><b>Neoverené:</b> skutočný zásah šípom (obdĺžnik golema) a let/zásah balvana – virtuálny joystick sa cez automatizáciu
+prehliadača nedá ovládať spoľahlivo; treba zahrať ručne.</li>
+</ul>
+
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
 <ul><li><code>player.cs64</code>: stojaci hráč čelom k stene + joystick do protismeru → len otočenie (<code>pturn</code>,
 10 snímok); pohyb pri ďalšom stlačení alebo dlhšom držaní. Overené: v bunke (4,0) otočenie doprava → doľava bez
