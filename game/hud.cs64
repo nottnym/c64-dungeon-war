@@ -43,11 +43,18 @@ function addScore(p: byte, pos: byte, v: byte): void {
         if (i == b) { c = 0 } else { i = i - 1 }
     }
     showScore(p)
-    // život navyše pri 10 000 a potom každých 20 000 bodov, najviac MAX_LIVES (kap. 6)
-    v = scoreD[b] * 10 + scoreD[b + 1]          // skóre / 10 000 (najviac 99; nextLife skončí najviac na 101)
+    checkExtra(p)
+}
+
+// Život navyše pri 10 000 a potom každých 20 000 bodov, najviac MAX_LIVES (kap. 6). Počas výbuchu sa nepripisuje –
+// pripíše sa po ňom (endDying, krok 12.1).
+function checkExtra(p: byte): void {
+    if (pstate[p] == PS_DYING || pstate[p] == PS_OUT) { return }
+    var b: byte = scoreBase(p)
+    var v: byte = scoreD[b] * 10 + scoreD[b + 1]   // skóre / 10 000 (najviac 99; nextLife skončí najviac na 101)
     while (v >= nextLife[p]) {
         nextLife[p] = nextLife[p] + EXTRA_EVERY
-        if (pstate[p] != PS_OUT && plives[p] < MAX_LIVES) {
+        if (plives[p] < MAX_LIVES) {
             plives[p] = plives[p] + 1
             showLives(p, plives[p])
             sfx(SFX_TORCH)
@@ -60,6 +67,25 @@ function resetScore(p: byte): void {
     for i = 0 to 5 { scoreD[b + i] = 0 }
     nextLife[p] = EXTRA_FIRST
     showScore(p)
+}
+
+// Nápis „PLAYER n“ v stavovom riadku: viditeľný / skrytý (čierna) – blikanie počas výbuchu (krok 12.1).
+function showLabel(p: byte, on: bool): void {
+    var c: byte = 0
+    var col: byte = 0
+    if (p != 0) { c = 25 }
+    if (on) { col = 5  if (p != 0) { col = 7 } }      // farby ako drawStatus
+    for i = 0 to 7 { poke(COLRAM + c + i, col) }
+}
+
+// Okraj obrazovky bliká načerveno (smrť strážcu, krok 12.1). Volá sa raz za priechod hlavnej slučky.
+var borderFlash: byte = 0
+function tickBorder(): void {
+    if (borderFlash == 0) { return }
+    borderFlash = borderFlash - 1
+    var c: byte = 0
+    if ((borderFlash & 4) != 0) { c = 2 }             // na konci (0) čierny ako Vic.setBorder v initVideo
+    poke($D020, c)
 }
 
 // Srdiečka životov v riadku 1 (hráč 1 zľava, hráč 2 sprava).

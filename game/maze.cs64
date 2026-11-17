@@ -15,6 +15,7 @@ const C_POST: byte = 80              // + roh 0 ĽH, 1 PH, 2 ĽD, 3 PD
 const C_FLOOR: byte = 84
 const C_TUN_OPEN: byte = 85
 const C_TUN_SHUT: byte = 86
+const C_TUN_WALL: byte = 87          // stena východu bočnej brány (pás v strede znaku)
 const C_GATE: byte = 147
 
 // farby (farebná RAM; ≥ 8 = multicolor znak)
@@ -111,6 +112,23 @@ function setTunnels(open: bool): void {
     poke(ca + MZ_X + MZ_W * 3, COL_WALL)
 }
 
+// Bočné brány (tunely) zvýraznené zvonku: vodorovná stena nad otvorom a pod ním, 2 znaky od okraja bludiska (krok 12.1).
+// Polia na pevnej adrese = riadky obrazovky/farieb 8 a 10 (indexovaný zápis namiesto 16-bitových adries – šetrí kód).
+var twScrA: byte[40] @ $8400 + (MZ_Y + TUN_ROW * 3) * 40
+var twScrB: byte[40] @ $8400 + (MZ_Y + TUN_ROW * 3 + 2) * 40
+var twColA: byte[40] @ $D800 + (MZ_Y + TUN_ROW * 3) * 40
+var twColB: byte[40] @ $D800 + (MZ_Y + TUN_ROW * 3 + 2) * 40
+function drawTunnelWalls(): void {
+    for i = 0 to 3 {
+        var c: byte = TW_COL[i]
+        twScrA[c] = C_TUN_WALL                    // pás v strede riadku nad otvorom a pod ním (východ, nie uzáver)
+        twScrB[c] = C_TUN_WALL
+        twColA[c] = COL_WALL
+        twColB[c] = COL_WALL
+    }
+}
+const TW_COL: byte[] = [MZ_X - 2, MZ_X - 1, MZ_X + MZ_W * 3, MZ_X + MZ_W * 3 + 1]
+
 function drawMaze(): void {
     for y = 0 to MZ_H - 1 {
         for x = 0 to MZ_W - 1 { drawCell(x, y) }
@@ -118,6 +136,7 @@ function drawMaze(): void {
     drawGate(MZ_X)
     drawGate(MZ_X + (MZ_W - 1) * 3)
     setTunnels(true)
+    drawTunnelWalls()
 }
 
 // Mreža vstupnej brány (riadok pod bludiskom): zatvorená = C_GATE, otvorená = dlažba.

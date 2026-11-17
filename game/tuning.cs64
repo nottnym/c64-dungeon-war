@@ -12,6 +12,8 @@ const INV_TIME: byte = 50                // nezraniteľnosť po výstupe z brán
 const TUN_SHUT_TIME: byte = 150          // tunel zavalený po použití
 const EXTRA_FIRST: byte = 1              // prvý život navyše pri 10 000 bodoch (jednotka 10 000)
 const EXTRA_EVERY: byte = 2              // ďalšie každých 20 000 bodov
+const DYING_TIME: byte = 75              // výbuch hráča (priechody hry 25 Hz = 3 s; krok 12.1, predtým 48)
+const LABEL_BLINK: byte = 4              // blikanie „PLAYER n“ v stavovom riadku počas výbuchu (bit časovača)
 
 // --- príšery ---
 const T_SPEED: byte[] = [0, 128, 160, 224, 255, 96]   // –, slizák, kostlivec, tieň, zlodej, strážca
@@ -40,6 +42,7 @@ const BOSS_START_SHOW: byte = 150        // viditeľný na začiatku podlažia
 const BOSS_THROW_SHOW: byte = 25         // viditeľný pri hode balvana
 const BOSS_THROW_COOL: byte = 100        // pauza medzi balvanmi (+ náhodne 0–63)
 const BOULDER_SPEED: byte = 2            // balvan, pixely za snímok
+const BOSS_DIE_FLASH: byte = 50          // smrť strážcu: okraj bliká načerveno (krok 12.1, priechody/snímky)
 
 // --- predmety a podlažie ---
 const ITEM_LIFE: byte = 62               // truhlica/fakľa zmizne po ~10 s (jednotka 8 snímok)
@@ -47,3 +50,5 @@ const TORCH_TICKS: byte = 50             // fakľa odhalí tiene na ~8 s (jednot
 const CHEST_CHANCE: byte = 6             // šanca na truhlicu každých 8 snímok (z 256)
 const TORCH_CHANCE: byte = 3             // šanca na fakľu každých 8 snímok (z 256)
 const BONUS_TICKS: byte = 94             // pokladnica ~15 s (jednotka 8 snímok)
+const INTRO_TIME: byte = 100             // úvod podlažia (snímky 50 Hz)
+const INTRO_BONUS_TIME: byte = 175       // úvod pokladnice dlhší (krok 12.1)

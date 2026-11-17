@@ -154,7 +154,6 @@ const PS_GATE: byte = 0                  // čaká vo vstupnej bráne (nezranite
 const PS_ALIVE: byte = 1
 const PS_DYING: byte = 2                 // výbuch
 const PS_OUT: byte = 3                   // bez životov
-const DYING_TIME: byte = 48
 const SPR_BOOM: byte = 167               // výbuch 1–3 = sprity 39–41 (128 + 39)
 
 var pstate: byte[2] = [0, 0]
@@ -199,6 +198,16 @@ function leaveGate(p: byte): void {
     pinv[p] = INV_TIME
 }
 
+// Koniec výbuchu: −1 život, potom život navyše získaný počas výbuchu (krok 12.1 – inak by sa zisk a strata
+// navzájom zakryli), nápis „PLAYER n“ späť. Stav (brána/vonku) nastaví volajúci.
+function endDying(p: byte): void {
+    plives[p] = plives[p] - 1
+    pstate[p] = PS_GATE                  // checkExtra pripisuje len mimo výbuchu
+    checkExtra(p)
+    showLives(p, plives[p])
+    showLabel(p, true)
+}
+
 function killPlayer(p: byte): void {
     if (pstate[p] != PS_ALIVE) { return }
     pstate[p] = PS_DYING
@@ -225,9 +234,9 @@ function updatePlayer(p: byte, joy: byte): void {
     }
     if (pst == PS_DYING) {
         ptimer[p] = ptimer[p] - 1
+        showLabel(p, (ptimer[p] & LABEL_BLINK) == 0)   // krok 12.1: „PLAYER n“ bliká počas výbuchu
         if (ptimer[p] == 0) {
-            plives[p] = plives[p] - 1
-            showLives(p, plives[p])
+            endDying(p)
             if (plives[p] == 0) { pstate[p] = PS_OUT } else { enterGate(p) }
         }
         return
@@ -241,8 +250,8 @@ function updatePlayer(p: byte, joy: byte): void {
 function playerSprite(p: byte): byte {
     if (pstate[p] == PS_DYING) {
         var t: byte = ptimer[p]
-        if (t > 32) { return SPR_BOOM }
-        if (t > 16) { return SPR_BOOM + 1 }
+        if (t > DYING_TIME * 2 / 3) { return SPR_BOOM }      // krok 12.1: dlhší výbuch, fázy po tretinách
+        if (t > DYING_TIME / 3) { return SPR_BOOM + 1 }
         return SPR_BOOM + 2
     }
     return playerShape(p)

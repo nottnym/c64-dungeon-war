@@ -322,6 +322,8 @@ zapisovať do zoznamu námetov pre kompilátor.</div>
 <tr><td>8</td><td>Strážca hĺbky (boss)</td><td>podlažie 5</td></tr>
 <tr><td>9</td><td>Zvukové efekty, hudba, titulka, koniec hry, najvyššie skóre</td><td>kompletná hra</td></tr>
 <tr><td>10</td><td>Ladenie obtiažnosti, test na C64 Ultimate, správa o C#64</td><td>zoznam námetov pre kompilátor (<code>CSharp64-report.html</code>)</td></tr>
+<tr><td>11</td><td>Výkon: optimalizácia snímku, pevný krok 25 Hz (doplnené)</td><td>rovnomerný pohyb nezávislý od záťaže</td></tr>
+<tr><td>12</td><td>Doladenie po hraní (12.1: smrť hráča, pokladnica, život po výbuchu, smrť strážcu, bočné brány); testy dvoch hráčov, strážcu, zvuku</td><td>hra pôsobí zrozumiteľne, otestované na C64U</td></tr>
 </table>
 <p>Po každom kroku: build, kontrola konca kódu, test vo vstavanom emulátore C64U Code, zápis do tohto dokumentu
 (kap. „Priebeh“ pribudne s prvým krokom).</p>
@@ -745,6 +747,20 @@ Zistené z pamäte zastaveného emulátora (Analyzátor pamäte), overené hran�
 registri CIA natrvalo; teraz vždy <code>$FF</code> (commit <code>a60d347</code>).</li>
 <li><b>Poradie multiplexera pri zmene počtu spritov</b> (<code>setMuxTotal</code>): po hre dvoch hráčov mohli medzi prvými 10 položkami trvalej
 permutácie <code>order[]</code> ostať sprity 10/11 a potrebný sprite vypadnúť – poradie sa nanovo zoradí.</li>
+</ul>
+
+<h3>Krok 12.1 – doladenie po hraní (2026-11-17)</h3>
+<ul>
+<li><b>Smrť hráča výraznejšia:</b> výbuch 3 s namiesto ~2 s (<code>DYING_TIME</code> 75 priechodov, fázy po tretinách), nápis „PLAYER n“
+v stavovom riadku počas výbuchu bliká (<code>showLabel</code>, <code>LABEL_BLINK</code>).</li>
+<li><b>Pokladnica:</b> v stavovom riadku „TREASURY“ namiesto „FLOOR nn“, úvodný nápis 3,5 s (<code>INTRO_BONUS_TIME</code>).</li>
+<li><b>Život navyše až po výbuchu:</b> <code>checkExtra</code> počas výbuchu nepripisuje; <code>endDying</code> odpočíta život a potom pripíše
+zarobený – zisk a strata sa už nezakryjú a život zarobený počas výbuchu zachráni aj pri poslednom živote.</li>
+<li><b>Smrť strážcu:</b> okraj obrazovky ~2 s bliká načerveno (<code>borderFlash</code>, <code>BOSS_DIE_FLASH</code>).</li>
+<li><b>Bočné brány:</b> zvonku vodorovná stena nad otvorom a pod ním (2 znaky), nový znak 87 s pásom v strede znaku – steny
+o 3 px ďalej od otvoru, aby východ nevyzeral ako uzáver. Zápis cez polia na pevnej adrese riadkov obrazovky (prvý pokus so
+16-bitovými adresami pridal ~480 B a kód prerástol do obrazovky).</li>
+<li>Test: steny brán v emulátore, ostatné overil hráč. Koniec kódu <code>$827D</code> (rezerva 387 B).</li>
 </ul>
 
 <h3>Code review opráv po hraní (nezávislý agent, 2026-11-17) – opravené</h3>

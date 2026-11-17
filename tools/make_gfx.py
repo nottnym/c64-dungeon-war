@@ -132,6 +132,9 @@ for k, (y, x) in POST.items():
 multi(84, 'podlaha – dlažba', ["....", "....", "..2.", "....", "....", "....", "2...", "...."])
 multi(85, 'tunel – otvor (šípky)', ["....", ".2..", "222.", "2222", "222.", ".2..", "....", "...."])
 multi(86, 'tunel – zavalený', ["1313", "3131", "1313", "3131", "1313", "3131", "1313", "3131"])
+# steny východu bočnej brány zvonku (krok 12.1): kamenný pás v strede znaku – nad otvorom o 3 px vyššie a pod ním
+# o 3 px nižšie než pás okraja znaku, aby východ nepôsobil ako uzáver
+multi(87, 'stena východu bočnej brány', ["....", "....", "....", STONE_H[0], STONE_H[1], "....", "....", "...."])
 
 # --- radar: 2 × 2 bunky na znak, bunka = 2 dvojpixely × 4 riadky (hires bity) ----------------------
 for m in range(16):

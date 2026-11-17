@@ -74,6 +74,7 @@ function hitBoss(p: byte): void {
         sfx(SFX_BOSSDIE)                 // pred killMonster: SFX_KILL má nižšiu prioritu
         bossFlash = 0                    // výbuch nie biely (tickBoss sa po smrti nevolá – review k8 č. 3)
         bossShow = 0
+        borderFlash = BOSS_DIE_FLASH     // krok 12.1: okraj bliká načerveno
         award(p, 2, 2)                   // 2000
         award(p, 3, 5)                   // + 500
         killMonster(0)

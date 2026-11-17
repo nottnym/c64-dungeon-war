@@ -65,6 +65,7 @@
  84  podlaha – dlažba
  85  tunel – otvor (šípky)
  86  tunel – zavalený
+ 87  stena východu bočnej brány
 128  radar maska 0000
 129  radar maska 0001
 130  radar maska 0010

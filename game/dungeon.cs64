@@ -78,11 +78,14 @@ function printAt(row: byte, col: byte, readonly text: byte[], color: byte): void
 
 function drawStatus(): void {
     printAt(0, 0, T_P1, 5)
-    printAt(0, 16, T_FLOOR, 1)
     printAt(0, 25, T_P2, 7)                // text: farba < 8 (≥ 8 = multicolor znak)
-    var n: byte = floorNo
-    poke(SCREEN + 22, 48 + n / 10)
-    poke(SCREEN + 23, 48 + n % 10)
+    if (isBonus) { printAt(0, 16, T_TREASURY, 7) }   // krok 12.1: v pokladnici namiesto „FLOOR nn“
+    else {
+        printAt(0, 16, T_FLOOR, 1)
+        var n: byte = floorNo
+        poke(SCREEN + 22, 48 + n / 10)
+        poke(SCREEN + 23, 48 + n % 10)
+    }
     showScore(0)                           // texty vyššie majú „000000“ – skutočné skóre naspäť
     showScore(1)
 }
@@ -105,7 +108,6 @@ const N_SPRITES: byte = 6 + MAX_MON
 const T_FLOOR_N:  byte[] = screenCodes("FLOOR")
 const T_TREASURY: byte[] = screenCodes("TREASURY")
 var hideAll: bool = false                // úvod podlažia: všetky sprity skryté
-const INTRO_TIME: byte = 100
 const T_JOIN:  byte[] = screenCodes("FIRE:JOIN")      // "=" vo vlastnom písme nie je
 const T_BLANK9: byte[] = screenCodes("         ")
 var p2Joined: bool = false
@@ -267,6 +269,7 @@ function beginIntro(): void {
     clearRows(2, 24)
     hideAll = true
     introTimer = INTRO_TIME
+    if (isBonus) { introTimer = INTRO_BONUS_TIME }   // krok 12.1: nápis TREASURY dlhšie
     clearBossHp()                          // ukazovateľ strážcu nepatrí do úvodu ďalšieho podlažia
     bassStop()
     musicPlay(MUS_JINGLE)                  // znelka podlažia (GT2)
@@ -312,10 +315,7 @@ function startFloor(): void {
     aon[0] = 0
     aon[1] = 0
     for p = 0 to 1 {
-        if (pstate[p] == PS_DYING) {       // umieral pri konci podlažia → život sa odpočíta teraz
-            plives[p] = plives[p] - 1
-            showLives(p, plives[p])
-        }
+        if (pstate[p] == PS_DYING) { endDying(p) }   // umieral pri konci podlažia → život sa odpočíta teraz
         pinv[p] = 0
         if (plives[p] != 0) { enterGate(p) } else { pstate[p] = PS_OUT }
     }
@@ -414,6 +414,7 @@ function main(): void {
             newGame(dbg)
             state = ST_INTRO
         }
+        tickBorder()                               // krok 12.1: červený okraj po smrti strážcu (aj počas úvodu)
         if (state == ST_TITLE) {
             drawTitleSprites(frame)
             if (press) {
