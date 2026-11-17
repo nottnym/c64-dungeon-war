@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dungeon War – príručka programátora</title>
+<style>
+:root { --fg: #1d1d1d; --bg: #ffffff; --muted: #5a5a5a; --line: #cfcfcf; --code-bg: #f5f5f5; --th: #f0f0f0;
+        --note-bg: #fff8e1; --note-line: #ffb300; --ok-bg: #e8f5e9; --ok-line: #43a047;
+        --q-bg: #e3f2fd; --q-line: #1e88e5; --link: #0b5cad; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg: #e6e6e6; --bg: #17181a; --muted: #a6a6a6; --line: #3a3c40; --code-bg: #222428; --th: #26282c;
+          --note-bg: #332b12; --note-line: #c99a1e; --ok-bg: #16301b; --ok-line: #3e9a48;
+          --q-bg: #142a3d; --q-line: #4a9be0; --link: #7db7ff; }
+}
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.55; margin: 2rem auto;
+       max-width: 1080px; color: var(--fg); background: var(--bg); padding: 0 1rem; }
+h1 { border-bottom: 3px solid var(--fg); padding-bottom: .4em; }
+h2 { margin-top: 2.4em; border-bottom: 1px solid var(--line); padding-bottom: .25em; }
+h3 { margin-top: 1.6em; }
+a { color: var(--link); }
+pre { background: var(--code-bg); padding: .75rem 1rem; overflow-x: auto; border-radius: 4px; border: 1px solid var(--line); }
+code { font-family: Consolas, "Fira Code", monospace; font-size: .92em; }
+table { border-collapse: collapse; margin: 1em 0; width: 100%; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: .35em .7em; text-align: left; vertical-align: top; }
+th { background: var(--th); }
+td:first-child { white-space: nowrap; }
+.note { background: var(--note-bg); border-left: 4px solid var(--note-line); padding: .6em 1em; margin: 1em 0; border-radius: 4px; }
+.ok { background: var(--ok-bg); border-left: 4px solid var(--ok-line); padding: .6em 1em; margin: 1em 0; border-radius: 4px; }
+.q { background: var(--q-bg); border-left: 4px solid var(--q-line); padding: .6em 1em; margin: 1em 0; border-radius: 4px; }
+.muted { color: var(--muted); }
+nav ol { columns: 2; column-gap: 2.5rem; }
+@media (max-width: 640px) { nav ol { columns: 1; } }
+</style>
+</head>
+<body>
+<h1>Dungeon War – príručka programátora</h1>
+<p class="muted">Stav k 2026-11-17 (po kroku 12.1, commit <code>a8786ab</code>). Prehľad zdrojov, rutín, dát a nástrojov hry Dungeon War
+v jazyku C#64. Herný návrh a priebeh vývoja sú v <a href="DungeonWar-design.html">DungeonWar-design.html</a>, nálezy o kompilátore
+v <a href="CSharp64-report.html">CSharp64-report.html</a>.</p>
+
+<div class="ok"><b>V skratke:</b> jeden program C#64 (<code>game/dungeon.cs64</code> + 11 modulov cez <code>uses</code>) s dvoma
+dátovými súbormi na disku. Hra beží v hlavnej slučke s pevným krokom 25 Hz, sprity kreslí triedený multiplexer
+<code>std:mux2</code> v IRQ, bludisko je znaková grafika 3 × 3 znaky na bunku. Kód musí skončiť pod obrazovkou <code>$8400</code>
+(rezerva ~330 B).</div>
+
+<nav>
+<h2 style="margin-top:1em">Obsah</h2>
+<ol>
+<li><a href="#start">Rýchly štart: build a test</a></li>
+<li><a href="#arch">Architektúra a hlavná slučka</a></li>
+<li><a href="#pamat">Pamäť, obrazovka a disk</a></li>
+<li><a href="#subory">Zdrojové súbory</a></li>
+<li><a href="#rutiny">Moduly a rutiny</a></li>
+<li><a href="#data">Kľúčové dátové štruktúry</a></li>
+<li><a href="#sprity">Sprity a multiplexer</a></li>
+<li><a href="#grafika">Grafika (znaky, sprity)</a></li>
+<li><a href="#zvuk">Zvuk a hudba</a></li>
+<li><a href="#nastroje">Nástroje (tools/)</a></li>
+<li><a href="#ladenie">Ladenie a meranie</a></li>
+<li><a href="#pasce">Pasce C#64 a zásady</a></li>
+<li><a href="#recepty">Recepty: ako pridať …</a></li>
+</ol>
+</nav>
+
+<!-- ======================================================================= -->
+<h2 id="start">1. Rýchly štart: build a test</h2>
+<h3>Lokálny build</h3>
+<pre>cd game
+bash build.sh          # → build/dungeon.prg, build/dungeon.d64, build/dungeon.asm (+ .labels, .vars)</pre>
+<ul>
+<li>Kompilátor je <code>cs64build</code> z repozitára Bruce Lee (<code>../../Bruce Lee/tools/cs64build</code>), postavený nad
+<code>C64U-Code.Shared</code> (štandardné knižnice <code>std:*</code> sú v <code>C64U-Code.Shared/CSharp64/StdLib.cs</code>).</li>
+<li><code>build.sh</code> po preklade skontroluje, že kód končí pod <code>$8400</code> (kompilátor to nekontroluje) a vypíše
+<code>koniec kódu $xxxx (rezerva …)</code>. Pri prekročení PRG a D64 zmaže.</li>
+<li><code>build/dungeon.asm</code> je vygenerovaný assembler – najlepší nástroj na overenie, čo kompilátor naozaj spravil
+(adresy premenných v <code>build/dungeon.vars</code>).</li>
+</ul>
+<h3>Test v C64U Code (projekt 35)</h3>
+<pre>python -I tools/make_sql_project.py mssql &lt;scratch&gt;/dw.sql
+sqlcmd -S ".\SQLEXPRESS" -E -d C64U_Code -b -i &lt;scratch&gt;/dw.sql     # PowerShell; vypíše PROJECT_ID=35 … CHANGED_ITEMS=n</pre>
+<ul>
+<li>Skript nahrá všetky zdroje (podľa <code>uses</code>) a dátové kúsky <code>assets/*</code> do projektu „Dungeon War“; zmenené položky
+aktualizuje, nič nemaže. Hudba ide ako položka SIDTRACK (.sng) s bázou <code>$B000</code>.</li>
+<li><b>Editor si drží zdroje z chvíle otvorenia</b> – po nahraní treba projekt znova otvoriť (Domov → Dungeon War alebo F5).</li>
+<li>Spustenie: rozbaľovacia ponuka pri tlačidle Spustiť → „Spustiť v emulátore“ alebo odoslanie na C64 Ultimate.
+Joystick hráča 1 je port 2.</li>
+</ul>
+
+<!-- ======================================================================= -->
+<h2 id="arch">2. Architektúra a hlavná slučka</h2>
+<h3>Stavy hry (<code>dungeon.cs64</code>, premenná <code>state</code>)</h3>
+<table>
+<tr><th>Stav</th><th>Čo beží</th><th>Prechod</th></tr>
+<tr><td><code>ST_TITLE</code></td><td>titulka: legenda (sprity), tabuľka skóre s farebnou vlnou, hudba subtune 0; bez multicolor znakov</td>
+<td>fire → <code>newGame(1)</code> → <code>ST_INTRO</code></td></tr>
+<tr><td><code>ST_INTRO</code></td><td>„FLOOR nn“ / „TREASURY“, sprity skryté, znelka; <code>introTimer</code> snímok (50 Hz)</td>
+<td>→ <code>startFloor()</code> → <code>ST_PLAY</code></td></tr>
+<tr><td><code>ST_PLAY</code></td><td>hra (pevný krok 25 Hz), pauza RUN/STOP</td>
+<td>podlažie vyčistené → <code>advanceFloor</code> + <code>beginIntro</code>; obaja hráči <code>PS_OUT</code> → <code>ST_OVER</code></td></tr>
+<tr><td><code>ST_OVER</code></td><td>„QUEST OVER“ 4 s, hudba konca</td><td>→ <code>afterGame(0)</code></td></tr>
+<tr><td><code>ST_ENTRY</code></td><td>zadanie 4-písmenového mena do tabuľky</td><td>→ <code>insertScore</code>, <code>saveScores</code>, <code>afterGame</code></td></tr>
+</table>
+<p><code>afterGame(from)</code> nájde ďalšieho hráča, ktorý sa dostal do tabuľky (hráč 2 len ak sa pripojil), inak zobrazí titulku.</p>
+
+<h3>Jeden priechod slučky</h3>
+<pre>pevný krok: ak bol predošlý priechod herný a logika skončila do snímku (Mux2.st[4] == 0) → waitFrame() navyše
+Mux2.waitFrame()                       1. začiatok snímku
+Joy.read2() / Joy.read1()              2. vstup (hráč 1 port 2, hráč 2 port 1), hrany fire po portoch
+ladiaci skok ($02FF), tickBorder()
+podľa stavu:
+  ST_PLAY: RUN/STOP (len pri pustenom joysticku 2), joinP2, updatePlayer+moveArrow (×2), updateTunnels,
+           BFS (bfsStart / bfsStep), updateMonster ×6, updateMonPos, moveShots, collide,
+           updateRadar (každý 2. priechod), updateItems, updateDark, sfxTick, updateFloor, koniec hry
+drawSprites()                          zápis polôh do polí mux2 (len zmeny)
+Mux2.update()                          3. commit – triedenie a tabuľky pre IRQ</pre>
+<div class="note"><b>Časovanie:</b> počas hry trvá každý priechod presne 2 snímky (25 Hz) – všetky rýchlosti a časovače v
+<code>tuning.cs64</code> sú v týchto priechodoch, hoci komentáre miestami hovoria „snímky“. Titulka, úvod, koniec a zadanie mena
+bežia 50 Hz. Multiplexer zaberá ~120 rastrov snímku, preto 50 Hz bez prestavby nie je reálne (dizajn, krok 11).</div>
+
+<h3>Poradie modulov</h3>
+<p><code>dungeon.cs64</code> načíta moduly v poradí <code>layout, tuning, maze, player, monster, hud, combat, floor, boss, sound, screens</code>.
+Všetko je v jednom globálnom mennom priestore (funkcie a premenné modulov sa navzájom vidia bez prefixu); knižnice sú pod aliasmi
+<code>Vic</code>, <code>Joy</code>, <code>Mux2</code>.</p>
+
+<!-- ======================================================================= -->
+<h2 id="pamat">3. Pamäť, obrazovka a disk</h2>
+<table>
+<tr><th>Oblasť</th><th>Obsah</th><th>Poznámka</th></tr>
+<tr><td><code>$0801–$83FF</code></td><td>kód a konštanty C#64</td><td>koniec kontroluje <code>build.sh</code>; teraz <code>$82B6</code></td></tr>
+<tr><td><code>$02A7–$02B6</code></td><td><code>dosIo</code> (<code>$02AA</code> = RTI pre NMI), <code>dosCmd</code> „S0:DW SCORES“</td><td>screens.cs64</td></tr>
+<tr><td><code>$02F4–$02FF</code></td><td>ladiace a meracie bunky</td><td>kap. <a href="#ladenie">11</a></td></tr>
+<tr><td><code>$8400–$87E7</code></td><td>obrazovka (VIC banka 2), ukazovatele spritov <code>$87F8</code></td><td><code>SCREEN</code></td></tr>
+<tr><td><code>$8800–$8FFF</code></td><td>znaková sada (<code>assets/charset</code>)</td><td><code>includeAt</code></td></tr>
+<tr><td><code>$9000–$931A</code></td><td>„DW LEVELS“ – 12 podlaží × 66 B</td><td>VIC tu vidí znakovú ROM, CPU má RAM</td></tr>
+<tr><td><code>$93FE–$9431</code></td><td>„DW SCORES“ – hlavička PRG + 5 × 10 B (<code>hsFile</code>)</td><td>prepisuje sa na disk</td></tr>
+<tr><td><code>$A000–$AFFF</code></td><td>sprity (blok VIC 128 + číslo)</td><td><code>assets/sprites</code></td></tr>
+<tr><td><code>$B000–$BFFF</code></td><td>hudba GT2 (init <code>$B000</code>, play <code>$B003</code>, ZP <code>$02/$03</code>)</td><td>vyžaduje <code>poke(1,$36)</code> – BASIC ROM preč</td></tr>
+<tr><td><code>$C000–$CBFF</code></td><td>premenné C#64</td><td><code>memoryLayout</code></td></tr>
+<tr><td><code>$CC00–$CDFF</code></td><td>halda</td><td></td></tr>
+<tr><td><code>$CE00–$CFFF</code></td><td>tabuľky <code>std:mux2</code></td><td>nič iné tam nesmie byť</td></tr>
+</table>
+
+<h3>Rozloženie obrazovky (40 × 25)</h3>
+<table>
+<tr><th>Riadky</th><th>Obsah</th></tr>
+<tr><td>0</td><td>stavový riadok: „PLAYER 1 000000“ (stĺpec 0), „FLOOR nn“/„TREASURY“ (16), „PLAYER 2 000000“ (25)</td></tr>
+<tr><td>1</td><td>srdiečka životov (vľavo hráč 1, vpravo hráč 2), „GUARD“ + bodky strážcu (stĺpec 15), „FIRE:JOIN“, hlášky</td></tr>
+<tr><td>2–19</td><td>bludisko 11 × 6 buniek po 3 × 3 znaky od stĺpca 3 (<code>MZ_X</code>, <code>MZ_Y</code>); tunely v riadku buniek 2 (obrazovka riadok 9)</td></tr>
+<tr><td>20–22</td><td>vstupné brány pod bunkami 0 a 10 (mreža v riadku 20), odpočet vedľa brány</td></tr>
+<tr><td>20–24</td><td>radar s rámikom (stĺpce 16–23), nápis „RADAR“ (riadok 22, stĺpec 10)</td></tr>
+</table>
+<p>Súradnice spritov: pixel bludiska (x, y) → obrazovka X = x + 48, Y = y + 67. Stred bunky (cx, cy) = (24·cx, 24·cy);
+brána má y = 144 (<code>GATE_Y</code>).</p>
+
+<!-- ======================================================================= -->
+<h2 id="subory">4. Zdrojové súbory</h2>
+<table>
+<tr><th>Súbor</th><th>Riadky</th><th>Obsah</th></tr>
+<tr><td><code>game/dungeon.cs64</code></td><td>500</td><td>hlavný súbor: <code>memoryLayout</code>, <code>uses</code>, video, stavový riadok, kreslenie spritov, nová hra/podlažie, stavy, <code>main</code></td></tr>
+<tr><td><code>game/layout.cs64</code></td><td>25</td><td>adresy (obrazovka, znaky, sprity) a dátové súbory na disku (<code>diskFile</code>)</td></tr>
+<tr><td><code>game/tuning.cs64</code></td><td>54</td><td>všetky herné konštanty obtiažnosti na jednom mieste</td></tr>
+<tr><td><code>game/maze.cs64</code></td><td>159</td><td>dáta podlažia, kreslenie stien, brán, tunelov a stien bočných brán, <code>rowAddr</code>, <code>CELL_OF</code></td></tr>
+<tr><td><code>game/player.cs64</code></td><td>290</td><td>hráči: pohyb po mriežke, otočenie na mieste, tunely, brána, výbuch, šípy</td></tr>
+<tr><td><code>game/monster.cs64</code></td><td>609</td><td>príšery: typy, pohyb, AI, BFS, streľba, neviditeľnosť, objavovanie, výbuchy</td></tr>
+<tr><td><code>game/combat.cs64</code></td><td>95</td><td>zásahy: šíp × príšera, príšera × hráč, šíp × druhý hráč, strela × hráč</td></tr>
+<tr><td><code>game/hud.cs64</code></td><td>192</td><td>skóre, životy navyše, životy, odpočet brány, blikanie nápisu, červený okraj, radar</td></tr>
+<tr><td><code>game/floor.cs64</code></td><td>343</td><td>priebeh podlaží: zásoba príšer, zrýchľovanie, zlodej, truhlice, fakle, temné podlažie, pokladnica</td></tr>
+<tr><td><code>game/boss.cs64</code></td><td>142</td><td>strážca hĺbky (5., 10., … podlažie): 2 sprity, život, balvany, <code>putWide</code></td></tr>
+<tr><td><code>game/sound.cs64</code></td><td>181</td><td>hudba GT2, interpret efektov (hlasy 1–2), basový podklad (hlas 3), pauza</td></tr>
+<tr><td><code>game/screens.cs64</code></td><td>356</td><td>titulka, tabuľka skóre a jej uloženie na disk, zadanie mena, RUN/STOP, pauza</td></tr>
+<tr><td><code>game/build.sh</code></td><td></td><td>build a kontrola konca kódu</td></tr>
+<tr><td><code>game/assets/</code></td><td></td><td>generované dáta: <code>charset.bin</code>, <code>sprites.bin</code>, <code>levels.bin</code>, <code>scores.bin</code>, <code>music.sng/.bin</code>, <code>gfx_map.txt</code></td></tr>
+</table>
+
+<!-- ======================================================================= -->
+<h2 id="rutiny">5. Moduly a rutiny</h2>
+<p class="muted">Výber dôležitých rutín; čísla riadkov sa menia, hľadajte podľa mena. „Volá sa“ = kto rutinu spúšťa.</p>
+
+<h3>dungeon.cs64</h3>
+<table>
+<tr><th>Rutina</th><th>Účel</th></tr>
+<tr><td><code>main()</code></td><td>načítanie dát (<code>includeAt</code>, <code>loadFile("DW LEVELS")</code>), <code>initSystem</code>, <code>loadScores</code>, <code>poke(1,$36)</code>, video, sprity, hlavná slučka</td></tr>
+<tr><td><code>initVideo()</code></td><td>VIC banka 2, <code>$D018</code>, multicolor znaky, farby pozadia a <code>$D022/$D023</code></td></tr>
+<tr><td><code>initSprites()</code></td><td>multicolor sprity, <code>$D025/$D026</code>, štart <code>std:mux2</code></td></tr>
+<tr><td><code>putSprite(n, x, y, col, shape)</code></td><td><b>inline</b>; zapisuje priamo do polí mux2 len zmenené zložky (cache <code>sprX/sprY/sprS/sprC</code>); <code>shape = 0</code> skryje</td></tr>
+<tr><td><code>setMuxTotal(n)</code></td><td>počet spritov multiplexera (10 bez hráča 2, 12 s ním) a nové zoradenie <code>Mux2.order[]</code></td></tr>
+<tr><td><code>drawSprites()</code></td><td>všetkých 12 logických spritov z herného stavu (pri <code>hideAll</code> skryje všetky)</td></tr>
+<tr><td><code>newGame(f)</code> / <code>beginIntro()</code> / <code>startFloor()</code></td><td>nová hra; úvod podlažia (zapne multicolor); postavenie podlažia (bludisko, príšery, hráči v bránach, radar, podklad)</td></tr>
+<tr><td><code>joinP2()</code></td><td>pripojenie hráča 2 (raz za hru, fire na porte 1)</td></tr>
+<tr><td><code>distChanged()</code></td><td>či sa zmenili bunky/stavy hráčov → nová mapa vzdialeností BFS</td></tr>
+<tr><td><code>printAt</code>, <code>clearScreen</code>, <code>clearRows</code>, <code>drawStatus</code></td><td>text v kódoch obrazovky, mazanie, stavový riadok</td></tr>
+<tr><td><code>afterGame(from)</code></td><td>po hre: zadanie mena alebo titulka</td></tr>
+<tr><td><code>mark(k)</code></td><td>meranie rastrov po fázach (len pri <code>dbgOn</code>)</td></tr>
+</table>
+
+<h3>maze.cs64</h3>
+<table>
+<tr><th>Rutina</th><th>Účel</th></tr>
+<tr><td><code>loadLevel(n, mirror)</code></td><td>skopíruje podlažie n z „DW LEVELS“ do <code>cell[66]</code>, voliteľne zrkadlovo (od 13. podlažia)</td></tr>
+<tr><td><code>wallsOf(x, y)</code> / <code>cellChar(w, c, r)</code> / <code>drawCell(x, y)</code></td><td>steny bunky → 9 znakov <code>C_WALL + maska</code> / dlažba</td></tr>
+<tr><td><code>drawMaze()</code></td><td>celé bludisko, brány, tunely, steny bočných brán</td></tr>
+<tr><td><code>drawGate</code>, <code>setGateBars</code>, <code>setTunnels(open)</code>, <code>drawTunnelWalls</code></td><td>vstupné brány a mreža, otvorené/zavalené tunely, steny východu (polia na pevnej adrese)</td></tr>
+<tr><td><code>rowAddr(r)</code></td><td>offset riadku obrazovky z tabuliek <code>ROW_LO/ROW_HI</code> (bez násobenia)</td></tr>
+<tr><td><code>CELL_OF[px]</code></td><td>tabuľka pixel → najbližšia bunka (namiesto delenia 24)</td></tr>
+</table>
+
+<h3>player.cs64</h3>
+<table>
+<tr><th>Rutina</th><th>Účel</th></tr>
+<tr><td><code>updatePlayer(p, joy)</code></td><td>stavový automat hráča: brána (odpočet, výstup fire/hore), živý (pohyb, streľba na hranu fire), výbuch</td></tr>
+<tr><td><code>movePlayer(p, joy)</code></td><td>pohyb po mriežke: smer sa mení v strede bunky, otočenie na mieste (<code>TURN_HOLD</code>), tunely, steny</td></tr>
+<tr><td><code>pickDir</code>, <code>canGo</code>, <code>opposite</code></td><td>smer z joysticku, voľný smer z <code>open[]</code>, opačný smer</td></tr>
+<tr><td><code>enterGate</code> / <code>leaveGate</code></td><td>hráč do brány s odpočtom / z brány s nezraniteľnosťou <code>INV_TIME</code></td></tr>
+<tr><td><code>killPlayer</code> / <code>endDying</code></td><td>začiatok výbuchu; koniec výbuchu: −1 život, potom život navyše (<code>checkExtra</code>), nápis späť</td></tr>
+<tr><td><code>fireArrow</code>, <code>moveArrow</code>, <code>arrowShape</code></td><td>šíp hráča (1 na hráča, <code>ARROW_SPEED</code>, stena = koniec)</td></tr>
+<tr><td><code>updateTunnels</code>, <code>closeTunnels</code></td><td>tunely zavalené na <code>TUN_SHUT_TIME</code> po použití</td></tr>
+<tr><td><code>playerShape</code>, <code>playerSprite</code></td><td>tvar podľa smeru a fázy chôdze; výbuch po tretinách <code>DYING_TIME</code></td></tr>
+</table>
+
+<h3>monster.cs64</h3>
+<table>
+<tr><th>Rutina</th><th>Účel</th></tr>
+<tr><td><code>updateMonster(i)</code></td><td>jeden priechod príšery: výbuch, čakanie na návrat (blikanie), inak <code>moveMonster</code></td></tr>
+<tr><td><code>moveMonster(i)</code></td><td>časovače (streľba, neviditeľnosť, strážca), pohyb s akumulátorom rýchlosti, v strede bunky rozhodnutie a streľba</td></tr>
+<tr><td><code>chooseDir(i)</code></td><td>AI: najbližší voľný smer k cieľu (slizák/kostlivec Manhattan, tieň a strážca mapa BFS), 1/4 náhodne, bez otočenia späť a obsadených buniek</td></tr>
+<tr><td><code>computeOpen()</code>, <code>monCanGo</code></td><td>voľné smery buniek pre AI/BFS/šípy</td></tr>
+<tr><td><code>bfsStart</code>, <code>bfsStep</code>, <code>computeDist</code></td><td>mapa vzdialeností k hráčom po častiach (<code>BFS_STEP</code> buniek za priechod) / celá naraz</td></tr>
+<tr><td><code>seesPlayer</code>, <code>seesCell</code>, <code>fireShot</code></td><td>kostlivec (a strážca) vidí hráča v priamke bez steny a nie bližšie ako <code>SKEL_MIN_DIST</code> → strela</td></tr>
+<tr><td><code>advance(d, n)</code>, <code>moveShots()</code></td><td>posun strely/šípu so stenami (výsledok v <code>gX/gY</code>)</td></tr>
+<tr><td><code>spawnMonster</code>, <code>spawnFloor</code>, <code>spawnThief</code>, <code>killMonster</code></td><td>objavenie, príšery podlažia, zlodej, smrť a návrat zo zásoby</td></tr>
+<tr><td><code>monVisible</code>, <code>monShape</code>, <code>monColor</code>, <code>monSprite</code></td><td>viditeľnosť (tieň, kostlivec od 8. podlažia, strážca), tvar a farba</td></tr>
+<tr><td><code>updateMonPos()</code></td><td>pixelové polohy <code>mxp/myp</code> raz za priechod (pre kreslenie a zásahy)</td></tr>
+<tr><td><code>speedOf(t)</code>, <code>rand8()</code>, <code>nearestPlayer</code></td><td>rýchlosť typu + zrýchlenie; LFSR; najbližší živý hráč</td></tr>
+</table>
+
+<h3>combat.cs64</h3>
+<table>
+<tr><th>Rutina</th><th>Účel</th></tr>
+<tr><td><code>collide()</code></td><td>každý priechod polovica príšer (<code>colHalf</code>): šíp × príšera (body cez <code>award</code>, strážca cez <code>hitBoss</code>), dotyk príšery, šíp × druhý hráč (+1000), strela × hráč</td></tr>
+<tr><td><code>near(a, b, lim)</code></td><td>inline <code>|a − b| &lt; lim</code> bez 16-bit aritmetiky (pozor: pre lim ≥ 16 pretečie – strážca používa <code>absDiff</code>)</td></tr>
+</table>
+
+<h3>hud.cs64</h3>
+<table>
+<tr><th>Rutina</th><th>Účel</th></tr>
+<tr><td><code>addScore(p, pos, v)</code></td><td>pripočíta číslicu v na pozíciu pos (desiatkové číslice s prenosom), potom <code>checkExtra</code></td></tr>
+<tr><td><code>checkExtra(p)</code></td><td>život navyše pri 10 000 a každých 20 000 (nie počas výbuchu)</td></tr>
+<tr><td><code>showScore</code>, <code>resetScore</code>, <code>showLives</code>, <code>showGateCount</code></td><td>stavový riadok</td></tr>
+<tr><td><code>showLabel(p, on)</code></td><td>nápis „PLAYER n“ viditeľný/skrytý (blikanie počas výbuchu)</td></tr>
+<tr><td><code>tickBorder()</code></td><td>červené blikanie okraja po smrti strážcu (<code>borderFlash</code>)</td></tr>
+<tr><td><code>initRadar</code>, <code>radarChar</code>, <code>updateRadar</code></td><td>radar 2 × 2 bunky na znak, rámik; prekresľuje len znaky, kde sa príšera presunula</td></tr>
+</table>
+
+<h3>floor.cs64</h3>
+<table>
+<tr><th>Rutina</th><th>Účel</th></tr>
+<tr><td><code>floorLayout()</code></td><td>rozloženie (mod 12), zrkadlenie od 13., pokladnica, strážca, temné podlažie, neviditeľné kostlivce</td></tr>
+<tr><td><code>setupFloor(f)</code>, <code>nextReserve()</code></td><td>zloženie príšer podlažia a zásoba</td></tr>
+<tr><td><code>updateFloor()</code></td><td>raz za priechod: zrýchľovanie, zlodej, pokladnica; vracia true pri vyčistení</td></tr>
+<tr><td><code>advanceFloor()</code></td><td>ďalšie podlažie / pokladnica po 3., 7., 11. …</td></tr>
+<tr><td><code>updateSpeed()</code>, <code>award()</code></td><td>zrýchlenie podľa času a počtu príšer; body (dvojnásobok po zlodejovi)</td></tr>
+<tr><td><code>updateItems</code>, <code>placeItem</code>, <code>removeItem</code>, <code>randomCell</code></td><td>truhlice a fakle: objavenie, zánik, zobratie</td></tr>
+<tr><td><code>updateDark</code>, <code>colorArea</code>, <code>darkAll</code>, <code>litAll</code></td><td>temné podlažie: steny odhalené okolo hráčov</td></tr>
+<tr><td><code>startBonusItems</code>, <code>updateBonus</code></td><td>pokladnica: 6 truhlíc na ~15 s</td></tr>
+</table>
+
+<h3>boss.cs64</h3>
+<table>
+<tr><th>Rutina</th><th>Účel</th></tr>
+<tr><td><code>setupBoss</code>, <code>placeBoss</code></td><td>strážca v slote príšery 0 + 2 tiene, slot 1 prázdny (pravá polovica golema)</td></tr>
+<tr><td><code>hitBoss(p)</code></td><td>zásah: −1 život, zviditeľnenie, zrýchlenie; posledný = 2500 bodov a červený okraj</td></tr>
+<tr><td><code>drawBoss()</code>, <code>putWide(…)</code></td><td>2 sprity vedľa seba so 16-bitovým X (ľavá polovica môže byť vľavo od bludiska; používa aj titulka)</td></tr>
+<tr><td><code>showBossHp</code>, <code>clearBossHp</code>, <code>tickBoss</code></td><td>ukazovateľ „GUARD ••••••••“, časovače viditeľnosti</td></tr>
+</table>
+
+<h3>sound.cs64</h3>
+<table>
+<tr><th>Rutina</th><th>Účel</th></tr>
+<tr><td><code>musicPlay(n)</code> / <code>musicStop()</code></td><td>subtune GT2: odpojí prehrávač z IRQ (pod <code>sei</code>), init, znova pripojí</td></tr>
+<tr><td><code>sfx(id)</code>, <code>sfxTick()</code></td><td>spustenie efektu s prioritou na hlase podľa <code>SFX_VOICE</code>; interpret raz za priechod</td></tr>
+<tr><td><code>bassStart</code>, <code>bassStop</code>, <code>bassTick</code></td><td>basová linka na hlase 3, tempo podľa <code>speedBonus</code></td></tr>
+<tr><td><code>soundPause(on)</code>, <code>silenceSid()</code></td><td>pauza (hlasitosť), ticho</td></tr>
+</table>
+
+<h3>screens.cs64</h3>
+<table>
+<tr><th>Rutina</th><th>Účel</th></tr>
+<tr><td><code>showTitle()</code>, <code>drawTitleSprites</code>, <code>pulseScores</code>, <code>setMulticolor</code></td><td>titulka (multicolor vypnutý), legenda, farebná vlna tabuľky</td></tr>
+<tr><td><code>initSystem()</code></td><td>zariadenie z <code>$BA</code>, NMI vektor na RTI, príkaz DOS</td></tr>
+<tr><td><code>loadScores</code>, <code>defaultScores</code>, <code>saveScores()</code></td><td>tabuľka z disku; zápis: zastaví mux, KERNAL IRQ, scratch + <code>saveFile</code>, kontrola chybového kanála, späť mux</td></tr>
+<tr><td><code>scratchScores</code>, <code>readDosStatus</code></td><td><code>asm</code>: OPEN 15 „S0:DW SCORES“, čítanie stavu mechaniky</td></tr>
+<tr><td><code>beats</code>, <code>qualifies</code>, <code>insertScore</code>, <code>drawScores</code></td><td>porovnanie a vloženie do tabuľky, kreslenie</td></tr>
+<tr><td><code>showEntry</code>, <code>drawEntry</code>, <code>updateEntry</code></td><td>zadanie mena joystickom</td></tr>
+<tr><td><code>runStopDown()</code>, <code>showPaused</code></td><td>sken RUN/STOP (pod <code>sei</code>, len pri <code>$DC00 = $FF</code>), nápis pauzy</td></tr>
+</table>
+
+<!-- ======================================================================= -->
+<h2 id="data">6. Kľúčové dátové štruktúry</h2>
+<h3>Bludisko</h3>
+<ul>
+<li><code>cell[66]</code> (index <code>y · 11 + x</code>): bit 0 stena vpravo, bit 1 stena dole, bit 2 tunel vpravo (x = 10), bit 3 otvor do brány dole (y = 5). Ľavý a horný okraj je vždy stena.</li>
+<li><code>open[66]</code>: voľné smery bunky (<code>D_UP 1, D_DOWN 2, D_LEFT 4, D_RIGHT 8</code>) bez tunelov a brán – <code>computeOpen</code>.</li>
+<li><code>dist[66]</code>: vzdialenosť k najbližšiemu hráčovi (BFS) pre tiene a strážcu; <code>occ[66]</code> rezervácie buniek príšerami.</li>
+</ul>
+<h3>Hráči (polia [2])</h3>
+<p><code>px, py</code> (pixely bludiska), <code>pdir</code>, <code>pface</code>, <code>pcx, pcy</code> (posledná bunka), <code>pstate</code>
+(<code>PS_GATE 0, PS_ALIVE 1, PS_DYING 2, PS_OUT 3</code>), <code>ptimer</code>, <code>psecs</code>, <code>plives</code>, <code>pinv</code>
+(nezraniteľnosť), <code>pfirePrev</code>; šípy <code>aon, ax, ay, adir</code>.</p>
+<h3>Príšery (polia [6])</h3>
+<p><code>mtype</code> (živý typ, 0 = nič), <code>mkind</code> (typ slotu, vráti sa po smrti), bunka <code>mcx, mcy</code> + posun <code>moff</code>
+v smere <code>mdir</code>, <code>mspd/macc</code> (rýchlosť × 256 a akumulátor), <code>mcool</code>, <code>mcloak/mshow</code>, <code>mboom</code>,
+<code>mresp</code>, pixelové polohy <code>mxp/myp</code>. Typy: <code>M_SLIME 1, M_SKEL 2, M_SHADE 3, M_THIEF 4, M_BOSS 5</code>.</p>
+<h3>Strely (polia [2])</h3>
+<p><code>son, shotX, shotY, sdir, sown</code> (vlastník, 1 strela na kostlivca), <code>sbig</code> (balvan strážcu).
+<b>Nepremenúvať na <code>sx/sy</code></b> – kolízia s <code>Mux2.sy</code>, viď <a href="#pasce">pasce</a>.</p>
+<h3>Skóre a tabuľka</h3>
+<ul>
+<li><code>scoreD[12]</code>: hráč p má 6 desiatkových číslic od <code>p · 6</code>, najvyššia prvá – žiadna 16-bit aritmetika.</li>
+<li><code>hsFile[52]</code> na <code>$93FE</code>: 2 B hlavička PRG + 5 × (6 číslic + 4 znaky mena v kódoch obrazovky); celé sa zapisuje na disk.</li>
+</ul>
+
+<!-- ======================================================================= -->
+<h2 id="sprity">7. Sprity a multiplexer</h2>
+<table>
+<tr><th>Logický sprite</th><th>Obsah</th></tr>
+<tr><td>0</td><td>hráč 1</td></tr>
+<tr><td>1–6</td><td>príšery 0–5 (strážca: 1 + 2 = ľavá a pravá polovica)</td></tr>
+<tr><td>7</td><td>šíp hráča 1 (<code>SPR_ARROW1</code>)</td></tr>
+<tr><td>8–9</td><td>strely príšer (<code>SPR_SHOT0</code>)</td></tr>
+<tr><td>10</td><td>hráč 2 (<code>SPR_P2</code>)</td></tr>
+<tr><td>11</td><td>šíp hráča 2 (<code>SPR_ARROW2</code>)</td></tr>
+</table>
+<ul>
+<li><code>std:mux2</code>: polia <code>sy $CE20</code>, <code>sxlo $CE40</code>, <code>scol $CE60</code>, <code>sptr $CE80</code>, <code>sxhi $CEE0</code>,
+trvalá permutácia <code>order $CEC0</code>; stav <code>st $CE18</code> (<code>st[0]</code> počet spritov, <code>st[4]</code> príznak začiatku snímku,
+<code>st[5]</code> tabuľky pripravené). IRQ číta len snapshot, ktorý <code>update()</code> pripraví.</li>
+<li>Hra zapisuje do polí priamo (<code>putSprite</code>) – <code>setPos/setSprite</code> počítajú 9. bit X 16-bitovo (~93 inštrukcií).
+Skrytý sprite má <code>sy = 255</code> (<code>Mux2.hide</code>); <code>sy</code> menšie ako <code>LEAD</code> sa ticho preskočí.</li>
+<li>Cache <code>sprX/sprY/sprS/sprC</code> v <code>putSprite</code> znamená: kto zapíše do polí mux2 inou cestou, musí sprite skryť
+(<code>sprS = 0</code>), inak sa poloha neprepíše (<code>putWide</code> drží v <code>sprX</code> spodný bajt obrazovkového X).</li>
+<li><code>Mux2.setMusicPlay</code> mení operand JSR bajt po bajte – volať len pod <code>sei</code>.</li>
+</ul>
+
+<!-- ======================================================================= -->
+<h2 id="grafika">8. Grafika (znaky, sprity)</h2>
+<p>Generuje <code>tools/make_gfx.py</code> → <code>game/assets/charset.bin</code>, <code>sprites.bin</code>, prehľad <code>gfx_map.txt</code>.
+Znaky sú multicolor (4 × 8 dvojpixelov: pozadie, <code>$D022</code>, <code>$D023</code>, farebná RAM) okrem textu, radaru a srdca (hires, farba &lt; 8).</p>
+<table>
+<tr><th>Kódy</th><th>Obsah</th></tr>
+<tr><td>0–58</td><td>písmo (hires): A–Z 1–26, medzera 32, 0–9 48–57, interpunkcia</td></tr>
+<tr><td>64–79</td><td>steny: <code>64 + maska</code> (bit 0 hore, 1 dole, 2 vľavo, 3 vpravo)</td></tr>
+<tr><td>80–83</td><td>stĺpiky v rohoch (nepoužívajú sa)</td></tr>
+<tr><td>84</td><td>dlažba</td></tr>
+<tr><td>85, 86</td><td>tunel otvorený (šípky) / zavalený</td></tr>
+<tr><td>87</td><td>stena východu bočnej brány (pás v strede znaku)</td></tr>
+<tr><td>88–95</td><td>rámik radaru (hires)</td></tr>
+<tr><td>128–143</td><td>radar: <code>128 + maska</code> 2 × 2 bunky (hires)</td></tr>
+<tr><td>144–148</td><td>truhlica (2 znaky), fakľa, mreža brány, srdce</td></tr>
+</table>
+<p>Sprity: blok VIC = 128 + číslo spritu (<code>SPR_BASE</code>); šíp 164/165, balvan 166, výbuch 167–169. Tvary hráčov a príšer
+(animácia 2 fázy) – <code>playerShape</code>, <code>T_SPRITE[]</code> v monster.cs64. Spoločné farby spritov <code>$D025</code> čierna (obrys), <code>$D026</code> biela.</p>
+
+<!-- ======================================================================= -->
+<h2 id="zvuk">9. Zvuk a hudba</h2>
+<ul>
+<li><b>Hudba GT2</b> (<code>tools/make_music</code>) na <code>$B000</code>, prehrávač volá IRQ multiplexera. Subtunes: 0 titulka, 1 znelka podlažia,
+2 koniec hry, 3 ticho. Počas hry GT2 nehrá (zapisoval by všetky 3 hlasy).</li>
+<li><b>Efekty:</b> <code>SFX_DATA</code> – každý efekt: AD, SR, priebeh (bez GATE bitu), potom horné bajty frekvencie po krokoch, 0 = koniec;
+<code>SFX_OFS</code> začiatky, <code>SFX_VOICE</code> hlas (0 hráči, 1 príšery/udalosti), <code>SFX_PRI</code> priorita.</li>
+<li><b>Podklad:</b> hlas 3, tabuľky <code>BASS_LO/HI</code>, tempo rastie so zrýchlením príšer.</li>
+<li>Registre SID sú pole <code>sidReg[25] @ $D400</code> → indexovaný zápis <code>sta $D400,x</code> (varovanie kompilátora o I/O je v poriadku).</li>
+</ul>
+
+<!-- ======================================================================= -->
+<h2 id="nastroje">10. Nástroje (tools/)</h2>
+<table>
+<tr><th>Nástroj</th><th>Vstup → výstup</th></tr>
+<tr><td><code>make_gfx.py</code></td><td>definície v kóde → <code>charset.bin</code>, <code>sprites.bin</code>, <code>gfx_map.txt</code></td></tr>
+<tr><td><code>make_levels.py</code></td><td><code>levels.txt</code> (ASCII bludiská) → <code>levels.bin</code> (12 × 66 B) s kontrolami okraja, súvislosti, tunelov a brán</td></tr>
+<tr><td><code>make_scores.py</code></td><td>predvolená tabuľka → <code>scores.bin</code> (50 B)</td></tr>
+<tr><td><code>make_music/</code> (C#, <code>dotnet run</code>)</td><td>skladba v kóde (model SidSong) → <code>music.sng</code> (GT2), <code>music.bin</code> (prehrávač na <code>$B000</code>), <code>build/music.sid</code>; overenie v emulátore 6502</td></tr>
+<tr><td><code>make_sql_project.py</code></td><td>zdroje + assets → SQL skript pre projekt v C64U Code (<code>mssql</code> / <code>pg</code>)</td></tr>
+</table>
+
+<!-- ======================================================================= -->
+<h2 id="ladenie">11. Ladenie a meranie</h2>
+<table>
+<tr><th>Adresa</th><th>Význam</th></tr>
+<tr><td><code>$02FF</code></td><td>zápis n (1–24) cez monitor → nová hra na podlaží n</td></tr>
+<tr><td><code>$02F4</code></td><td>zápis 1 → v najbližšom hernom priechode sa uložia rastre (/2) po fázach do <code>$02F5–$02FB</code> (<code>mark</code>)</td></tr>
+<tr><td><code>$02FB–$02FC</code></td><td>počet herných priechodov dlhších ako 1 snímok (16 bit, za podlažie)</td></tr>
+<tr><td><code>$02FD–$02FE</code></td><td>počet herných priechodov (16 bit) – pri pevnom kroku ~25/s</td></tr>
+</table>
+<ul>
+<li><b>Analyzátor pamäte</b> v C64U Code (načítanie zo vstavaného emulátora alebo z C64U) + <code>build/dungeon.vars</code> – stav hry sa dá
+prečítať priamo (tak sa našla chyba so <code>sy</code>: hráč v hre v hornom riadku, v <code>Mux2.sy[0]</code> nula).</li>
+<li>Dočasné testovacie úpravy (napr. vynútená smrť) označiť <code>// TEST</code> a pred commitom overiť <code>grep TEST</code>.</li>
+</ul>
+
+<!-- ======================================================================= -->
+<h2 id="pasce">12. Pasce C#64 a zásady</h2>
+<table>
+<tr><th>Pasca</th><th>Ako sa jej vyhnúť</th></tr>
+<tr><td>Globál s menom člena knižnice (<code>sy</code>) sa rozlíšil ako <code>Mux2.sy</code> – čítania aj zápisy išli do multiplexera.</td><td>Nepoužívať mená členov <code>Mux2/Joy/Vic</code> (<code>sy, st, stop, fire, left, hit</code> …) ani pre lokálne premenné; overiť v <code>dungeon.asm</code>.</td></tr>
+<tr><td>Kód nad <code>$8400</code> prepíše obrazovka.</td><td>Sledovať rezervu z <code>build.sh</code>; pri raste kódu zvážiť polia na pevnej adrese namiesto <code>poke(uint16 + i)</code>.</td></tr>
+<tr><td>16-bitové adresy (<code>SCREEN + rowAddr(r) + c</code>) v slučkách sú drahé.</td><td>Pole na pevnej adrese (<code>var a: byte[N] @ $8400 + r*40</code>) → <code>sta abs,x</code>. Polia sa nesmú prekrývať (zdieľať napr. <code>colRowsA/B</code>).</td></tr>
+<tr><td>Funkcia volaná raz sa vloží (inline) automaticky; <code>inline</code> funkcia volaná 12× sa 12× rozbalí.</td><td>Pre zriedkavé volania obal bez inline (<code>titleSpr</code>).</td></tr>
+<tr><td><code>return</code> na samostatnom riadku zoberie nasledujúci riadok ako výraz.</td><td>Písať <code>return</code> na konci bloku alebo <code>if (…) { return }</code>.</td></tr>
+<tr><td>Reťazce sú PETSCII-shifted – názvy súborov musia byť malými písmenami (<code>"dw scores,p,w"</code>).</td><td>Pozri <code>saveScores</code>.</td></tr>
+<tr><td>BASIC ROM na <code>$A000–$BFFF</code> – CPU by čítal ROM namiesto hudby.</td><td><code>poke(1, $36)</code> po načítaní (KERNAL ostáva).</td></tr>
+<tr><td><code>$DC00</code> je zdieľaný joystick 2 / riadky klávesnice; virtuálny joystick C64U doň zapisuje.</td><td>Nepísať <code>$FF</code> každý snímok; sken klávesnice len cez <code>runStopDown</code>.</td></tr>
+<tr><td>Hires text v multicolor režime smie mať len farby 0–7 (≥ 8 = multicolor znak).</td><td>Titulka vypína multicolor (<code>setMulticolor</code>).</td></tr>
+<tr><td><code>near()</code> pretečie pre limit ≥ 16.</td><td>Väčšie vzdialenosti cez <code>absDiff</code>.</td></tr>
+<tr><td><code>asm {}</code> nevidí premenné C#64.</td><td>Komunikovať cez pevné adresy (<code>dosIo</code>, <code>dosCmd</code>).</td></tr>
+</table>
+
+<!-- ======================================================================= -->
+<h2 id="recepty">13. Recepty: ako pridať …</h2>
+<h3>… zmenu obtiažnosti</h3>
+<p>Upraviť konštantu v <code>tuning.cs64</code> (čas = herné priechody 25 Hz, rýchlosť = pixely × 256 na priechod), build, test. Tabuľka
+pôvodných hodnôt je v dizajne (krok 10).</p>
+<h3>… nové bludisko</h3>
+<p>Upraviť <code>tools/levels.txt</code> (12 podlaží, opakujú sa a od 13. sa zrkadlia), spustiť <code>python -I tools/make_levels.py</code>
+(skontroluje okraj, súvislosť, tunely, brány), build.</p>
+<h3>… zvukový efekt</h3>
+<p>Doplniť dáta na koniec <code>SFX_DATA</code>, začiatok do <code>SFX_OFS</code>, hlas do <code>SFX_VOICE</code>, prioritu do <code>SFX_PRI</code>,
+konštantu <code>SFX_…</code>; volať <code>sfx(SFX_…)</code>.</p>
+<h3>… nový znak alebo sprite</h3>
+<p>Definícia v <code>tools/make_gfx.py</code> (voľné kódy znakov 96–127, 149–255), spustiť skript, konštantu v príslušnom module; po nahraní
+do C64U Code sa prenesie aj <code>charset.bin</code>/<code>sprites.bin</code>.</p>
+<h3>… nový typ príšery</h3>
+<ol>
+<li><code>M_…</code> v monster.cs64 a riadky v <code>T_SPEED</code> (tuning), <code>T_COLOR</code>, <code>T_SPRITE</code>, <code>T_RADAR</code>, <code>T_POINTS</code>.</li>
+<li>Správanie v <code>chooseDir</code> / <code>moveMonster</code> / <code>monVisible</code>.</li>
+<li>Zloženie podlaží v <code>setupFloor</code>; sprity v <code>make_gfx.py</code>; legenda na titulke (<code>showTitle</code>, <code>drawTitleSprites</code>).</li>
+</ol>
+<h3>… prácu po každej zmene</h3>
+<ol>
+<li><code>bash game/build.sh</code> – skontrolovať rezervu kódu.</li>
+<li>Nahrať do C64U Code (<code>make_sql_project.py</code> + <code>sqlcmd</code>), znova otvoriť projekt, test v emulátore / na C64U.</li>
+<li>Zapísať zmenu do dizajnu (kap. „Priebeh vývoja“), commit.</li>
+</ol>
+</body>
+</html>
