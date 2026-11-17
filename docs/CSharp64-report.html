@@ -29,11 +29,11 @@ Podrobnosti po krokoch sú v <code>DungeonWar-design.html</code>, kap. 19.</p>
 <li><b>Hra je hotová v čistom C#64</b> bez ručného assembleru v hernej logike. Výnimkou sú dva krátke bloky <code>asm</code> pre kanál 15
 mechaniky (zmazanie súboru, prečítanie odpovede), lebo <code>open()</code> nevie nastaviť sekundárnu adresu 15. Kompilátor zvládol 2 hráčov, 6 príšer s AI a BFS,
 12 logických spritov cez <code>std:mux2</code>, hudbu GT2 v IRQ aj ukladanie na disk.</li>
-<li><b>Výkon:</b> na C64 Ultimate hlavná slučka na bežnom podlaží so šiestimi príšerami takmer v každom priechode pretečie snímok,
-a to s jedným aj s dvoma hráčmi. Multiplexer vtedy zopakuje predošlý obraz, takže logika beží efektívne ~25 Hz. Hra je hrateľná,
-lebo rýchlosti príšer sa ladili už v takto bežiacej hre. Pre 50 Hz by bolo treba zhruba polovičnú prácu na snímok (kap. 6).</li>
-<li><b>Veľkosť kódu</b> je najväčšie obmedzenie: program s konštantami zaberá <code>$0801–$8326</code> (~31 KB). Pod obrazovkou na
-<code>$8400</code> ostáva ~217 B. Časť tvorí réžia, ktorej by sa lepší kompilátor vedel vyhnúť (kap. 3). Jej podiel som nemeral.</li>
+<li><b>Výkon:</b> na C64 Ultimate sa hra so šiestimi príšerami do 50 Hz nezmestí: multiplexer sám zaberie ~120 riadkov snímku a typický
+snímok aj po optimalizácii (krok 11) končí okolo riadku 332 z 312. Hra preto beží s <b>pevným krokom 25 Hz</b> (každý priechod presne 2 snímky):
+nameraných 25,3 priechodu za sekundu, pohyb je rovnomerný (kap. 6).</li>
+<li><b>Veľkosť kódu</b> bola pri kroku 10 najväčšie obmedzenie (rezerva pod obrazovkou ~217 B); po kroku 11 program končí na <code>$80D2</code>
+a rezerva je 814 B. Časť tvorí réžia, ktorej by sa lepší kompilátor vedel vyhnúť (kap. 3). Jej podiel som nemeral.</li>
 <li><b>Najdrahšie chyby</b> nespôsobil kompilátor, ale prostredie: ROM BASIC-u nad <code>$A000</code> a PETSCII v mene súboru. Plochá RAM
 ladidla a rozdiely medzi emulátormi ich zakryli.</li>
 </ul>
@@ -45,6 +45,7 @@ ladidla a rozdiely medzi emulátormi ich zakryli.</li>
 <tr><td>8</td><td>strážca hĺbky</td><td><code>$6AFB</code> (s konštantami)</td></tr>
 <tr><td>9</td><td>zvuk, hudba GT2, titulka, skóre na disku</td><td><code>$7FF5</code> → po review <code>$8156</code></td></tr>
 <tr><td>10</td><td>životy navyše, neviditeľné kostlivce, ladiace konštanty, meranie; po review</td><td><code>$8339</code> → <code>$8327</code></td></tr>
+<tr><td>11</td><td>optimalizácia snímku, pevný krok 25 Hz</td><td><code>$80D2</code> (priamy zápis do mux2 a zjednodušené meranie ušetrili ~600 B)</td></tr>
 </table></div>
 <p>Krok 9 pridal ~5,3 KB do prvej verzie (<code>$7FF5</code>), s opravami po review ~5,6 KB. Z toho ~2,2 KB tvorili funkcie, ktoré kompilátor sám vložil do <code>main</code>. Ďalší 1 KB spôsobilo osem
 rozbalení inline <code>putSprite</code> na titulke, ktoré nahradila jedna obaľovacia funkcia.</p>
@@ -132,6 +133,11 @@ Pretečenie = pred <code>waitFrame()</code> je nastavený <code>Mux2.wasLate()</
 <p>Cesty k 50 Hz: logiku príšer striedať po snímkoch (polovica príšer v párnych, polovica v nepárnych snímkoch, dvojnásobný krok),
 radar a predmety nespracúvať každý snímok, lacnejší <code>setSprite</code> v knižnici (L3). Bráni tomu rezerva pamäte (~217 B). Riešením
 by bolo presunúť dáta alebo časť kódu pod KERNAL (<code>$E000–$FFFF</code>) alebo do <code>$B500–$BFFF</code>.</p>
+<h3>Krok 11</h3>
+<p>Po optimalizácii (priamy zápis do polí <code>std:mux2</code> – <code>setPos</code> stojí ~93 inštrukcií kvôli 16-bitovému 9. bitu X, rozloženie
+zásahov, radaru, AI a BFS do viacerých snímkov, 10 spritov bez hráča 2) klesli pretečenia z 2114 na 1741 za ~70 s, typický snímok ~332 riadkov.
+Hra preto dostala pevný krok 25 Hz: ak priechod skončí do snímku (<code>Mux2.st[4]</code> = <code>S_FRAME</code> ešte nenastavený), čaká sa o
+snímok navyše. Na C64U: 1326 priechodov za ~52,5 s = 25,3/s, 5,6 % priechodov dlhších ako 1 snímok, žiadne nad 2.</p>
 <p>Na zariadení sa overilo aj toto: titulka a legenda so spritmi, znelka a úvod podlažia (zvuk posúdi používateľ), temné podlažie s
 odhaľovaním stien, pauza RUN/STOP z klávesnice zariadenia.</p>
 </body>

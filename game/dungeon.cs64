@@ -373,12 +373,17 @@ function main(): void {
     poke(DBG_T, 0)                         // meranie od nuly (review č. 7)
     poke(DBG_T + 1, 0)
     while (true) {
-        // S_LATE treba čítať PRED waitFrame: pri pretečení ho frame-start nastaví, no ďalší frame-start (na ktorý
-        // waitFrame čaká) ho po hotovom update() zase vynuluje (review k10 č. 1).
-        if (lastPlay && Mux2.wasLate()) {
-            var lc: byte = peek(DBG_LATE) + 1
-            poke(DBG_LATE, lc)
-            if (lc == 0) { poke(DBG_LATE + 1, peek(DBG_LATE + 1) + 1) }
+        // Pevný krok hry 25 Hz (krok 11): každý priechod počas hry trvá presne 2 snímky – rýchlosti a časovače sú ladené
+        // na tento krok (hra predtým nestíhala 50 Hz a bežala nepravidelne 25–50 krokov/s). S_FRAME (Mux2.st[4]) = medzi
+        // posledným waitFrame a teraz už prišiel začiatok snímku; waitFrame ho na začiatku nuluje, preto sa číta pred ním.
+        // (wasLate sa na to nehodí – po dvojitom čakaní ho frame-start bez nového update() nastaví.)
+        var crossed: bool = Mux2.st[4] != 0
+        if (lastPlay) {
+            if (crossed) {                     // MERANIE: priechody dlhšie ako 1 snímok ($02FB–$02FC)
+                var lc: byte = peek(DBG_LATE) + 1
+                poke(DBG_LATE, lc)
+                if (lc == 0) { poke(DBG_LATE + 1, peek(DBG_LATE + 1) + 1) }
+            } else { Mux2.waitFrame() }        // logika skončila do snímku → počkať o snímok navyše
         }
         Mux2.waitFrame()                   // 1. začiatok snímku
         var wasPlay: bool = state == ST_PLAY && !paused   // meranie len v snímkoch hry (krok 10)
@@ -474,14 +479,10 @@ function main(): void {
         mark(6)
         dbgOn = 0
         lastPlay = wasPlay && state == ST_PLAY && !paused
-        if (lastPlay) {                           // nie titulka/úvod/koniec ani snímok so začiatkom podlažia (krok 10)
-            var rl: uint16 = peek($D012) | ((uint16)(peek($D011) & $80) << 1)
-            var lines: uint16 = rl + 62               // od frame-start rastra 250: (rl - 250) mod 312
-            if (rl >= 250) { lines = rl - 250 }
-            var half: byte = (byte)(lines >> 1)
-            var slot: uint16 = DBG_T
-            if (decBudget == 1) { slot = DBG_T + 1 }     // snímok s BFS (alebo s jedným rozhodnutím)
-            if (half > peek(slot)) { poke(slot, half) }
+        if (lastPlay) {                           // MERANIE: počet priechodov hry ($02FD–$02FE), pri pevnom kroku 25/s
+            var ic: byte = peek(DBG_T) + 1            // (najdlhší snímok modulo 312 sa nedal použiť – krok 10/11)
+            poke(DBG_T, ic)
+            if (ic == 0) { poke(DBG_T + 1, peek(DBG_T + 1) + 1) }
         }
     }
 }

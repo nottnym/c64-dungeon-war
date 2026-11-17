@@ -734,6 +734,25 @@ podlažia. Premerané na C64U: ~25 Hz (kap. Krok 10), správa opravená.</td></t
 jeden blok asm).</td><td>Opravené, meranie s 1 aj 2 hráčmi doplnené.</td></tr>
 </table>
 
+<h3>Krok 11 – výkon: pevný krok 25 Hz (2026-11-17)</h3>
+<ul>
+<li><b>Rozpis snímku na C64U</b> (3. podlažie, 1 hráč, riadky od začiatku snímku, nové meranie s pripočítaním 312 po ďalšom
+frame-start): štart multiplexera 40, hráč 16, príšery 48, zásahy 44, radar/predmety 24, zvuk + podlažie + kreslenie spritov ~136
+(beží v oblasti so spritmi, kde berú čas IRQ multiplexera, DMA spritov a badlines), <code>Mux2.update</code> 48 – spolu ~356 z 312.
+Samotný multiplexer zaberá ~120 riadkov snímku.</li>
+<li><b>Optimalizácie</b> (commit <code>23925a7</code>): <code>putSprite</code> zapisuje priamo do polí <code>std:mux2</code> (bajtový 9. bit X namiesto
+<code>setPos</code>/<code>setSprite</code> ~93 inštrukcií), polohy príšer bez volaní, zásahy len pre aktívnych hráčov a polovica príšer za snímok,
+radar každý druhý snímok, najviac 1 rozhodnutie AI a BFS 8 buniek za snímok, multiplexer 10 spritov bez hráča 2. Výsledok: typický
+snímok ~332 riadkov, pretečenia 2114 → 1741 za ~70 s – 50 Hz nedosiahnuteľné bez väčšej prestavby.</li>
+<li><b>Pevný krok:</b> počas hry trvá každý priechod presne 2 snímky (25 Hz). Ak logika skončí do snímku (príznak <code>S_FRAME</code>
+<code>Mux2.st[4]</code> ešte nie je nastavený), slučka počká o snímok navyše. Rýchlosti a časovače ostali – sú ladené na skutočné tempo, v ktorom
+sa hra doteraz hrala (nepravidelne 25–30 krokov/s), teraz je pohyb rovnomerný a nezávislý od záťaže. Titulka, úvod, koniec a zadanie
+mena bežia 50 Hz.</li>
+<li>Meranie: <code>$02FB–$02FC</code> = priechody dlhšie ako 1 snímok, <code>$02FD–$02FE</code> = počet priechodov hry (nahradilo nepoužiteľný
+„najdlhší snímok“). Na C64U, 1. podlažie: 1326 priechodov za ~52,5 s = <b>25,3/s</b>, z toho 74 (5,6 %) dlhších ako 1 snímok, žiadne nad 2.</li>
+<li>Koniec kódu <code>$80D2</code> (rezerva 814 B; pred krokom 11 217 B).</li>
+</ul>
+
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
 <ul><li><code>player.cs64</code>: stojaci hráč čelom k stene + joystick do protismeru → len otočenie (<code>pturn</code>,
 10 snímok); pohyb pri ďalšom stlačení alebo dlhšom držaní. Overené: v bunke (4,0) otočenie doprava → doľava bez
