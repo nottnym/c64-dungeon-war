@@ -176,9 +176,10 @@ function updateItems(): void {
             var pc: byte = pcy[p] * MZ_W + pcx[p]
             for k = 0 to MAX_ITEM - 1 {
                 if (itType[k] != IT_NONE && itCell[k] == pc) {
-                    if (itType[k] == IT_CHEST) { award(p, 3, 3) }           // 300 bodov
+                    if (itType[k] == IT_CHEST) { award(p, 3, 3)  sfx(SFX_CHEST) }   // 300 bodov
                     else {
                         award(p, 3, 1)                                      // 100 bodov
+                        sfx(SFX_TORCH)
                         torchTicks = TORCH_TICKS
                         if (isDark) { litAll() }
                     }

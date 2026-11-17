@@ -9,6 +9,7 @@
 //    $C000-$CBFF  premenné C#64, halda $CC00-$CDFF
 //    $CE00-$CFFF  tabuľky std:mux2 (nič iné tam nesmie byť)
 //
+//  Krok 9: zvuk (sound.cs64), titulka, koniec hry, najvyššie skóre na disku (screens.cs64), pauza RUN/STOP.
 //  Krok 8: strážca hĺbky (boss.cs64) na 5., 10., … podlaží.
 //  Krok 7: priebeh podlaží (floor.cs64) – zásoba príšer, zlodej, truhlice, fakle, temné podlažie, pokladnica.
 //  Krok 6: hráč 2 (joystick port 1, pripojí sa tlačidlom fire), vzájomné zásahy. Sprity: 0 hráč 1, 1-6 príšery, 7 šíp 1,
@@ -29,6 +30,8 @@ uses "hud.cs64"
 uses "combat.cs64"
 uses "floor.cs64"
 uses "boss.cs64"
+uses "sound.cs64"
+uses "screens.cs64"
 
 // Texty v hre sú po anglicky (rozhodnutie 2026-11-16).
 const T_P1:    byte[] = screenCodes("PLAYER 1 000000")
@@ -249,6 +252,8 @@ function beginIntro(): void {
     hideAll = true
     introTimer = INTRO_TIME
     clearBossHp()                          // ukazovateľ strážcu nepatrí do úvodu ďalšieho podlažia
+    bassStop()
+    musicPlay(MUS_JINGLE)                  // znelka podlažia (GT2)
     if (isBonus) { printAt(11, 16, T_TREASURY, 7) }
     else {
         printAt(11, 16, T_FLOOR_N, 1)
@@ -303,23 +308,53 @@ function startFloor(): void {
     initRadar()
     updateMonPos()                         // polohy spritov z novej hry hneď (review č. 4)
     if (isBonus) { startBonusItems() }
+    bassStart()                            // podklad + efekty (GT2 počas hry nehrá)
 }
 
+
+// Stavy hry v main (krok 9)
+const ST_TITLE: byte = 0
+const ST_INTRO: byte = 1
+const ST_PLAY: byte = 2
+const ST_OVER: byte = 3
+const ST_ENTRY: byte = 4
+const OVER_TIME: byte = 200              // 4 s „QUEST OVER" s hudbou konca hry
+var state: byte = ST_TITLE
+var stateTimer: byte = 0
+var paused: bool = false
+var stopPrev: bool = false
+
+// Koniec hry → zadanie mena prvého hráča, ktorý sa dostal do tabuľky (hráč 2 len ak sa pripojil), inak titulka.
+function afterGame(from: byte): void {
+    var p: byte = from
+    while (p < 2) {
+        if ((p == 0 || p2Joined) && qualifies(p)) {
+            showEntry(p)
+            state = ST_ENTRY
+            return
+        }
+        p = p + 1
+    }
+    showTitle()
+    state = ST_TITLE
+}
 
 function main(): void {
     includeAt(A_CHARSET, "assets/charset")
     includeAt(A_SPRITES, "assets/sprites")
+    includeAt(A_MUSIC, "assets/music")
     if (!loadFile("DW LEVELS")) {
         initVideo()
         clearScreen()
         printAt(12, 9, T_LOADERR, 2)
         while (true) { }
     }
+    loadScores()                           // pred spustením multiplexera (KERNAL LOAD)
+    poke(1, $36)                           // BASIC ROM preč: CPU musí na $A000-$BFFF čítať RAM (hudba GT2 na $B000)
     initVideo()
-    newGame(1)
+    clearScreen()
     initSprites()
-    var over: bool = false
-    var intro: bool = true
+    showTitle()
     var firePrev: bool = true
     var frame: byte = 0
     poke(DEBUG_LEVEL, 0)
@@ -336,52 +371,78 @@ function main(): void {
         var dbg: byte = peek(DEBUG_LEVEL)          // ladenie: nová hra na podlaží dbg
         if (dbg != 0 && dbg <= 24) {
             poke(DEBUG_LEVEL, 0)
+            paused = false
+            soundPause(false)
             newGame(dbg)
-            over = false
-            intro = true
+            state = ST_INTRO
         }
-        if (intro) {
-            introTimer = introTimer - 1
-            if (introTimer == 0) { startFloor()  intro = false }
-        } else { if (over) {
+        if (state == ST_TITLE) {
+            drawTitleSprites(frame)
             if (press) {
                 newGame(1)
-                over = false
-                intro = true
+                state = ST_INTRO
+            }
+        } else { if (state == ST_INTRO) {
+            introTimer = introTimer - 1
+            if (introTimer == 0) { startFloor()  state = ST_PLAY }
+        } else { if (state == ST_OVER) {
+            stateTimer = stateTimer - 1
+            if (stateTimer == 0) { afterGame(0) }
+        } else { if (state == ST_ENTRY) {
+            var ej: byte = joy
+            var ep: bool = press && Joy.fire(joy)
+            if (entryP == 1) { ej = joy1  ep = press && Joy.fire(joy1) }
+            if (updateEntry(ej, ep)) {
+                insertScore(entryP, entryName)
+                saveErr = !saveScores()           // hlášku ukáže titulka (showTitle)
+                afterGame(entryP + 1)
             }
         } else {
-            if (peek(DBG_REQ) != 0 && (frame & 7) != 0) { dbgOn = 1  poke(DBG_REQ, 0) }
-            mark(0)
-            if (!p2Joined && Joy.fire(joy1)) { joinP2() }
-            updatePlayer(0, joy)
-            moveArrow(0)
-            updatePlayer(1, joy1)
-            moveArrow(1)
-            updateTunnels()
-            mark(1)
-            decBudget = 2
-            if (distChanged()) { bfsStart()  decBudget = 1 }    // mapa vzdialeností len pri zmene hráčov,
-            else { if (bfsBusy) { bfsStep()  decBudget = 1 } }  // počítaná po častiach (BFS_STEP buniek za snímok)
-            for i = 0 to MAX_MON - 1 { updateMonster(i) }
-            updateMonPos()
-            mark(2)
-            moveShots()
-            collide()
-            mark(3)
-            updateRadar()
-            updateItems()
-            updateDark()
-            mark(4)
-            if (updateFloor()) { advanceFloor()  beginIntro()  intro = true }   // podlažie vyčistené
-            if (pstate[0] == PS_OUT && pstate[1] == PS_OUT) {   // koniec, až keď sú vonku všetci hráči
-                son[0] = 0                         // strely nezamrznú na obrazovke (review č. 4)
-                son[1] = 0
-                printAt(11, 15, T_QUEST_OVER, 2)
-                printAt(13, 15, T_PRESS_FIRE, 1)
-                over = true
+            var stop: bool = runStopDown()         // RUN/STOP = pauza
+            if (stop && !stopPrev) {
+                paused = !paused
+                soundPause(paused)
+                showPaused(paused)
             }
-        } }
-        drawSprites()
+            stopPrev = stop
+            if (!paused) {
+                if (peek(DBG_REQ) != 0 && (frame & 7) != 0) { dbgOn = 1  poke(DBG_REQ, 0) }
+                mark(0)
+                if (!p2Joined && Joy.fire(joy1)) { joinP2() }
+                updatePlayer(0, joy)
+                moveArrow(0)
+                updatePlayer(1, joy1)
+                moveArrow(1)
+                updateTunnels()
+                mark(1)
+                decBudget = 2
+                if (distChanged()) { bfsStart()  decBudget = 1 }    // mapa vzdialeností len pri zmene hráčov,
+                else { if (bfsBusy) { bfsStep()  decBudget = 1 } }  // počítaná po častiach (BFS_STEP buniek za snímok)
+                for i = 0 to MAX_MON - 1 { updateMonster(i) }
+                updateMonPos()
+                mark(2)
+                moveShots()
+                collide()
+                mark(3)
+                updateRadar()
+                updateItems()
+                updateDark()
+                mark(4)
+                sfxTick()
+                if (updateFloor()) { advanceFloor()  beginIntro()  state = ST_INTRO }   // podlažie vyčistené
+                if (pstate[0] == PS_OUT && pstate[1] == PS_OUT) {   // koniec, až keď sú vonku všetci hráči
+                    son[0] = 0                         // strely nezamrznú na obrazovke (review č. 4)
+                    son[1] = 0
+                    bassStop()
+                    musicPlay(MUS_OVER)
+                    printAt(11, 15, T_QUEST_OVER, 2)
+                    hideAll = true
+                    stateTimer = OVER_TIME
+                    state = ST_OVER
+                }
+            }
+        } } } }
+        if (state != ST_TITLE) { drawSprites() }
         mark(5)
         Mux2.update()                      // 3. commit – posledný zápis snímku
         mark(6)

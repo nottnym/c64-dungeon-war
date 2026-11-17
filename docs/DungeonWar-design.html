@@ -225,7 +225,8 @@ polovica); triedenie podľa Y, 8 na riadok</td><td><code>std:mux2</code> (MAX 24
 <tr><td><code>$0801–$7FFF</code></td><td>program C#64 (cieľ do ~20 KB, rezerva sa sleduje po každom kroku)</td></tr>
 <tr><td><code>$8000–$BFFF</code></td><td>VIC banka 2: obrazovka <code>$8400</code> (ukazovatele spritov <code>$87F8</code>),
 znaková sada <code>$8800–$8FFF</code>, sprity <code>$A000–$AFFF</code> (64 blokov), voľné <code>$B000–$BFFF</code>
-(hudba). <code>$9000–$9FFF</code> vidí VIC ako znakovú ROM – sem len dáta pre CPU (úrovne, tabuľky).</td></tr>
+(hudba GT2 <code>$B000–$B4AA</code>; krok 9: CPU ju vidí len s vypnutým BASIC ROM – <code>$01 = $36</code> po nahratí súborov).
+<code>$9000–$9FFF</code> vidí VIC ako znakovú ROM – sem len dáta pre CPU (úrovne <code>$9000</code>, najvyššie skóre <code>$9400</code>).</td></tr>
 <tr><td><code>$C000–$CDFF</code></td><td>premenné C#64</td></tr>
 <tr><td><code>$CE00–$CFFF</code></td><td>tabuľky <code>std:mux2</code> (nič iné tam nesmie byť)</td></tr>
 <tr><td><code>$D000–$DFFF</code></td><td>I/O</td></tr>
@@ -592,6 +593,42 @@ skrytie alebo zmenu tvaru) – poznámka v kóde.</td></tr>
 <p>Po opravách koniec kódu <code>$68F9</code>; hra v C64U Code štartuje, podlažie 1 beží. Zásah šípom, dotyk (stĺpec 0 vs 10)
 a balvany treba ešte zahrať ručne.</p>
 
+<h3>Krok 9 – zvuk, hudba, titulka, koniec hry, najvyššie skóre (2026-11-17)</h3>
+<ul>
+<li><b>Hudba GT2</b> (rozhodnutie 2026-11-17): <code>tools/make_music</code> (C# nad C64U-Code.Shared – <code>SidSong</code>,
+<code>SngWriter</code>, <code>Gt2Packer</code>) skladá skladbu z textového zápisu nôt a vyrobí <code>assets/music.sng</code> (položka
+SIDTRACK „assets/music“, <code>CommonStartAddress</code> = <code>$B000</code> – dá sa upravovať v SID trackeri) a zbalený
+<code>assets/music.bin</code> (1195 B, <code>$B000–$B4AA</code>) pre lokálny <code>cs64build</code>. Subtunes: 0 titulka (a mol, 8 taktov,
+slučka), 1 znelka podlažia (~1,6 s), 2 koniec hry (~3 s), 3 ticho. Nástroj prehrávač overí v emulátore 6502 (init + 500× play:
+najviac 613 cyklov, zápisy len do vlastnej pamäte, SID a ZP <code>$02–$03</code>). Prehrávač volá IRQ <code>std:mux2</code>
+(<code>setMusicPlay</code>).</li>
+<li><b>Počas hry GT2 nehrá</b> – prehrávač zapisuje všetky 3 hlasy každý snímok a efekty by sa s ním bili (opakované spúšťanie
+obálky). <code>sound.cs64</code>: vlastný interpret efektov na hlasoch 1–2 (12 efektov: výstrel, zásah, smrť, tieň, truhlica, fakľa,
+tunel, zlodej, zásah/smrť strážcu, balvan, výstrel kostlivca; priority; 1 krok = 1 snímok) a basová linka na hlase 3, ktorej tempo
+rastie so <code>speedBonus</code> (12 → najmenej 5 snímok na notu). Registre SID cez pole <code>sidReg @ $D400</code>.</li>
+<li><b>Titulka</b> (<code>screens.cs64</code>): názov, legenda príšer so spritmi (golem z 2 polovíc) a bodmi, tabuľka 5 najvyšších
+skóre, „PRESS FIRE TO START“, nápoveda k hráčovi 2 a pauze. Stavy v <code>main</code>: titulka → úvod podlažia → hra → koniec
+(4 s „QUEST OVER“ s hudbou) → zadanie mena (ak sa hráč dostal do tabuľky; hráč 2 len ak sa pripojil) → titulka.</li>
+<li><b>Najvyššie skóre</b>: 5 × (6 číslic + 3 znaky) na <code>$9400</code>, súbor „DW SCORES“ (<code>tools/make_scores.py</code>,
+predvolene 5000–1000 „DW“). Nahrá sa pri štarte (<code>loadFile</code>), po novom zázname sa zapíše
+<code>saveFile(hsFile, "@0:DW SCORES,P,W", 8)</code> – <code>hsFile</code> je pole na pevnej adrese <code>$93FE</code> s hlavičkou PRG.
+Na zápis sa multiplexer zastaví, vráti sa KERNAL IRQ (<code>$EA31</code>, CIA), po zápise sa reťaz spustí znova. Zadanie mena
+joystickom hráča (hore/dole písmeno, fire ďalej). Pri chybe zápisu titulka ukáže „DISK ERROR – SCORES NOT SAVED“.</li>
+<li><b>Pauza</b> RUN/STOP (stĺpec 7 riadku 7 klávesnice, <code>$DC00</code> sa hneď vráti na <code>$FF</code>, aby klávesy nečítal
+joystick 1): „PAUSED“ v riadku 1, hlasitosť 0.</li>
+<li><b>Pamäť:</b> po nahratí súborov <code>poke(1, $36)</code> – BASIC ROM vypnutý. Bez toho CPU na <code>$A000–$BFFF</code> čítal ROM
+a „prehrávač“ na <code>$B000</code> bol kód BASIC-u (pád na BRK / zaseknutie; ladidlo aj lokálny emulátor majú plochú RAM, preto
+tam chyba nebola). Sprity na <code>$A000</code> to netrápilo (VIC číta RAM).</li>
+<li>Koniec kódu <code>$7FF5</code> (krok 8: <code>$6AFB</code> vrátane konštánt) – +5,3 KB, z toho ~2,2 KB funkcie vložené do
+<code>main</code>; titulka mala pôvodne 8 rozbalení inline <code>putSprite</code> (+1 KB) → jedna obaľovacia funkcia. Rezerva po
+obrazovku <code>$8400</code> ~1 KB.</li>
+<li>Test v C64U Code (2026-11-17): titulka s legendou a tabuľkou (aj po nahratí „DW SCORES“), štart fire, znelka/úvod „FLOOR 01“,
+hra, pauza RUN/STOP, koniec hry → zadanie mena (dočasný test +2000 bodov) → zaradenie do tabuľky (pri rovnosti nižšie) → návrat na
+titulku so spritmi (multiplexer po zápise beží). <b>Zápis na disk vo vstavanom emulátore zlyhá</b> (aj do nového súboru bez
+<code>@0:</code>) – overiť na C64U / VICE, či ide o virtuálnu mechaniku emulátora alebo o postup ukladania. Zvuk som nepočul –
+hudbu a efekty treba posúdiť ušami.</li>
+</ul>
+
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
 <ul><li><code>player.cs64</code>: stojaci hráč čelom k stene + joystick do protismeru → len otočenie (<code>pturn</code>,
 10 snímok); pohyb pri ďalšom stlačení alebo dlhšom držaní. Overené: v bunke (4,0) otočenie doprava → doľava bez
@@ -622,6 +659,14 @@ predpočítať do polí. Podmienky s bajtmi sa prekladajú 16-bitovo (pozri č. 
 „nastav všetko, ale prepočítaj len zmenené“ alebo lacnejší <code>setSprite</code>.</td><td>námet</td></tr>
 <tr><td>7</td><td><code>step</code> je kľúčové slovo (<code>for … step</code>) a <code>rnd</code> vyhradené meno vstavanej
 funkcie – nedajú sa použiť ako mená premenných/funkcií; chybové hlášky sú zrozumiteľné.</td><td>poznámka</td></tr>
+<tr><td>10</td><td><code>Mux2.setMusicPlay</code> prepisuje operand <code>JSR</code> v IRQ po bajtoch – IRQ medzi zápismi skočí na
+polovičnú adresu. Dokumentácia o tom mlčí.</td><td>námet (v hre obalené <code>sei()</code>/<code>cli()</code>)</td></tr>
+<tr><td>11</td><td>Kód/dáta na <code>$A000–$BFFF</code> (hudba cez <code>includeAt</code>) CPU pri štandardnom <code>$01 = $37</code> nevidí –
+číta BASIC ROM. Kompilátor ani dokumentácia neupozornia; ladidlo C64U Code a <code>Emu6502</code> majú plochú RAM, chyba sa prejaví
+až vo VICE.</td><td>námet: varovanie pri <code>includeAt</code>/<code>sys</code> do <code>$A000–$BFFF</code> a <code>$E000+</code>, alebo
+automatické <code>$01 = $36</code></td></tr>
+<tr><td>12</td><td>Polia na pevnej adrese sa nesmú prekrývať (<code>hsFile</code> vs. <code>hs</code>) – zrozumiteľná chyba; varovanie pri
+poli v I/O (<code>sidReg @ $D400</code>) je zámerné, no nedá sa potlačiť.</td><td>poznámka</td></tr>
 <tr><td>6</td><td><code>cs64build</code> bez <code>memoryLayout</code> hlási kolíziu tabuliek <code>mux2</code> ($CE00) so
 string-heapom ($C800–$CFFF) – iné predvolenie než v aplikácii.</td><td>poznámka</td></tr>
 </table>

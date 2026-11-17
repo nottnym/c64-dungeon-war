@@ -77,6 +77,7 @@ function hitBoss(p: byte): void {
     bossHp = bossHp - 1
     showBossHp()
     if (bossHp == 0) {
+        sfx(SFX_BOSSDIE)                 // pred killMonster: SFX_KILL má nižšiu prioritu
         bossFlash = 0                    // výbuch nie biely (tickBoss sa po smrti nevolá – review k8 č. 3)
         bossShow = 0
         award(p, 2, 2)                   // 2000
@@ -86,6 +87,7 @@ function hitBoss(p: byte): void {
     }
     bossShow = BOSS_SHOW
     bossFlash = BOSS_FLASH
+    sfx(SFX_BOSSHIT)
     bossBoost = bossBoost + BOSS_BOOST
     mspd[0] = speedOf(M_BOSS)
 }

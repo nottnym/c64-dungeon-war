@@ -24,7 +24,9 @@ NAME = 'Dungeon War'
 DESCRIPTION = 'Dungeon War – pôvodná bludisková strieľačka v C#64 (test náročnej hry), docs/DungeonWar-design.html.'
 DISK_NAME, DISK_ID, MAIN_FILE = 'DUNGEON WAR', 'DW', 'DUNGEON WAR'
 ADMIN = '2ED27B6A-557C-4E04-BAE8-FF94B9A3305C'
-CS64, BIN = 192, 28          # CodelistValue: typ položky C# 64 a Binárne dáta
+CS64, BIN, SIDTRACK = 192, 28, 188   # CodelistValue: typ položky C# 64, Binárne dáta, GT2 skladba
+MUSIC_BASE = 0xB000          # báza GT2 hudby (tools/make_music: MUSIC_BASE, sound.cs64: A_MUSIC)
+START = {}                   # path → CommonStartAddress (len SIDTRACK)
 
 
 def read(path):
@@ -48,7 +50,14 @@ def collect_items():
         items.append((name, CS64, data))
     text = ''.join(read(os.path.join(GAME, n)).decode('utf-8') for n in sources)
     for asset in sorted(set(re.findall(r'"(assets/[A-Za-z0-9_]+)"', text))):
-        items.append((asset, BIN, read(os.path.join(GAME, asset + '.bin'))))
+        # GT2 skladba (game/assets/<meno>.sng): položka SIDTRACK s obsahom .sng a bázou MUSIC_BASE – C64U Code ju
+        # pri preklade zbalí prehrávačom na túto bázu; lokálny cs64build použije zbalené <meno>.bin.
+        sng = os.path.join(GAME, asset + '.sng')
+        if os.path.exists(sng):
+            items.append((asset, SIDTRACK, read(sng)))
+            START[asset] = MUSIC_BASE
+        else:
+            items.append((asset, BIN, read(os.path.join(GAME, asset + '.bin'))))
     return items
 
 
@@ -73,12 +82,17 @@ def mssql(items, pid, user):
     out += ['    SET @new = 1;', 'END;']
     for path, typ, data in items:
         h = '0x' + data.hex().upper()
-        out += [f'UPDATE ProjectItem SET Content = {h}, ChangedDate = SYSDATETIME(), ChangedById = \'{user}\' '
-                f'WHERE ProjectId = @p AND Path = {s(path)} AND SourceTypeId = {typ} AND Content <> {h}; '
+        st = START.get(path)
+        st = 'NULL' if st is None else str(st)
+        out += [f'UPDATE ProjectItem SET Content = {h}, CommonStartAddress = {st}, ChangedDate = SYSDATETIME(), '
+                f'ChangedById = \'{user}\' '
+                f'WHERE ProjectId = @p AND Path = {s(path)} AND SourceTypeId = {typ} '
+                f'AND (Content <> {h} OR ISNULL(CommonStartAddress, -1) <> ISNULL({st}, -1)); '
                 'SET @n = @n + @@ROWCOUNT;',
                 f'IF NOT EXISTS (SELECT 1 FROM ProjectItem WHERE ProjectId = @p AND Path = {s(path)}) BEGIN '
-                'INSERT INTO ProjectItem (ProjectId, Path, SourceTypeId, Content, CreatedDate, CreatedById, Obsolete) '
-                f"VALUES (@p, {s(path)}, {typ}, {h}, SYSDATETIME(), '{user}', 0); SET @n = @n + 1; END;"]
+                'INSERT INTO ProjectItem (ProjectId, Path, SourceTypeId, Content, CommonStartAddress, CreatedDate, '
+                f"CreatedById, Obsolete) VALUES (@p, {s(path)}, {typ}, {h}, {st}, SYSDATETIME(), '{user}', 0); "
+                'SET @n = @n + 1; END;']
     out += ['COMMIT TRANSACTION;',
             "SELECT 'PROJECT_ID=' + CAST(@p AS varchar(10)) + ' NEW=' + CAST(@new AS varchar(1)) "
             "+ ' CHANGED_ITEMS=' + CAST(@n AS varchar(10));"]
@@ -106,13 +120,17 @@ def pg(items, pid, user):
     out += ['        is_new := true;', '    END IF;']
     for path, typ, data in items:
         h = f"'\\x{data.hex()}'::bytea"
-        out += [f'    UPDATE "ProjectItem" SET "Content" = {h}, "ChangedDate" = localtimestamp, "ChangedById" = \'{u}\' '
+        st = START.get(path)
+        st = 'NULL' if st is None else str(st)
+        out += [f'    UPDATE "ProjectItem" SET "Content" = {h}, "CommonStartAddress" = {st}, '
+                f'"ChangedDate" = localtimestamp, "ChangedById" = \'{u}\' '
                 f'WHERE "ProjectId" = p AND "Path" = {s(path)} AND "SourceTypeId" = {typ} '
-                f'AND "Content" IS DISTINCT FROM {h};',
+                f'AND ("Content" IS DISTINCT FROM {h} OR "CommonStartAddress" IS DISTINCT FROM {st});',
                 '    GET DIAGNOSTICS c = ROW_COUNT; n := n + c;',
                 f'    IF NOT EXISTS (SELECT 1 FROM "ProjectItem" WHERE "ProjectId" = p AND "Path" = {s(path)}) THEN',
-                '        INSERT INTO "ProjectItem" ("ProjectId", "Path", "SourceTypeId", "Content", "CreatedDate", '
-                f'"CreatedById", "Obsolete") VALUES (p, {s(path)}, {typ}, {h}, localtimestamp, \'{u}\', false);',
+                '        INSERT INTO "ProjectItem" ("ProjectId", "Path", "SourceTypeId", "Content", '
+                '"CommonStartAddress", "CreatedDate", "CreatedById", "Obsolete") '
+                f'VALUES (p, {s(path)}, {typ}, {h}, {st}, localtimestamp, \'{u}\', false);',
                 '        n := n + 1;', '    END IF;']
     out += ["    RAISE NOTICE 'PROJECT_ID=% NEW=% CHANGED_ITEMS=%', p, is_new, n;", 'END', '$bl$;', 'COMMIT;']
     return '\n'.join(out) + '\n', 'utf-8'
@@ -129,7 +147,7 @@ def main():
     text, enc = (mssql if a.dialect == 'mssql' else pg)(items, a.id, a.user)
     open(a.out, 'w', encoding=enc, newline='\n').write(text)
     print(f'{a.out}: {len(items)} položiek ({sum(t == CS64 for _, t, _ in items)} CS64, '
-          f'{sum(t == BIN for _, t, _ in items)} BIN)')
+          f'{sum(t == BIN for _, t, _ in items)} BIN, {sum(t == SIDTRACK for _, t, _ in items)} SIDTRACK)')
 
 
 if __name__ == '__main__':

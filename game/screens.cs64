@@ -1,0 +1,219 @@
+// ============================================================================
+//  Dungeon War – obrazovky (krok 9): titulka, najvyššie skóre (disk "DW SCORES"), zadanie mena, pauza
+//  Tabuľka: 5 záznamov po 9 B (6 číslic 0–9 od najvyššej, 3 znaky mena v kódoch obrazovky) na $9400 – súbor
+//  "DW SCORES" (layout.cs64) sa nahrá pri štarte a po novom zázname sa prepíše (saveFile s hlavičkou $9400).
+// ============================================================================
+
+const HS_N: byte = 5
+const HS_LEN: byte = 9
+var hsFile: byte[47] @ A_SCORES - 2      // hlavička PRG (2 B) + tabuľka od hsFile[2] – celé sa zapisuje na disk
+
+const T_TITLE:   byte[] = screenCodes("DUNGEON  WAR")
+const T_SUB:     byte[] = screenCodes("INTO THE DEPTHS")
+const T_HISCORE: byte[] = screenCodes("HIGH SCORES")
+const T_START:   byte[] = screenCodes("PRESS FIRE TO START")
+const T_JOIN2:   byte[] = screenCodes("PLAYER 2 JOINS WITH FIRE ON PORT 1")
+const T_PAUSEK:  byte[] = screenCodes("RUN-STOP PAUSE")
+const T_L1: byte[] = screenCodes("SLIME     100")
+const T_L2: byte[] = screenCodes("SKELETON  200")
+const T_L3: byte[] = screenCodes("SHADE     500")
+const T_L4: byte[] = screenCodes("THIEF    1000")
+const T_L5: byte[] = screenCodes("GUARDIAN 2500")
+const T_NEWHS:   byte[] = screenCodes("NEW HIGH SCORE")
+const T_PLAYERN: byte[] = screenCodes("PLAYER")
+const T_NAME:    byte[] = screenCodes("ENTER YOUR NAME")
+const T_HOWTO:   byte[] = screenCodes("UP-DOWN LETTER  FIRE NEXT")
+const T_PAUSED:  byte[] = screenCodes(" PAUSED ")
+const T_SAVEERR: byte[] = screenCodes("DISK ERROR - SCORES NOT SAVED")
+const LEG_ROW: byte[] = [7, 10, 13, 16, 19]
+var saveErr: bool = false                // posledný zápis skóre na disk zlyhal
+
+// Predvolená tabuľka, keď "DW SCORES" na disku chýba.
+function defaultScores(): void {
+    for i = 0 to 44 { hsFile[2 + i] = 0 }
+    for k = 0 to HS_N - 1 {
+        hsFile[2 + k * HS_LEN + 2] = 5 - k                 // 5000, 4000, … 1000
+        hsFile[2 + k * HS_LEN + 6] = 4                     // "DW " – D
+        hsFile[2 + k * HS_LEN + 7] = 23                    // W
+        hsFile[2 + k * HS_LEN + 8] = 32
+    }
+}
+
+function loadScores(): void {
+    if (!loadFile("DW SCORES")) { defaultScores() }
+}
+
+// Zápis na disk: multiplexer na chvíľu zastaví a vráti KERNAL IRQ (CIA časovač), potom ho znova spustí.
+function saveScores(): bool {
+    hsFile[0] = $00
+    hsFile[1] = $94
+    sei()
+    Mux2.stop()
+    poke($D015, 0)
+    poke($0314, $31)
+    poke($0315, $EA)
+    poke($DC0D, $81)
+    cli()
+    saveFile(hsFile, "@0:DW SCORES,P,W", 8)
+    var ok: bool = ioResult() == 0
+    sei()
+    irq(frameIrq)
+    Mux2.start()
+    cli()
+    return ok
+}
+
+// Skóre hráča p je väčšie ako záznam k?
+function beats(p: byte, k: byte): bool {
+    var b: byte = scoreBase(p)
+    var e: byte = k * HS_LEN
+    for i = 0 to 5 {
+        var a: byte = scoreD[b + i]
+        var c: byte = hsFile[2 + e + i]
+        if (a > c) { return true }
+        if (a < c) { return false }
+    }
+    return false
+}
+
+function qualifies(p: byte): bool { return beats(p, HS_N - 1) }
+
+// Vloží skóre hráča p s menom name (3 kódy) na správne miesto.
+function insertScore(p: byte, readonly name: byte[]): void {
+    var k: byte = 0
+    while (k < HS_N && !beats(p, k)) { k = k + 1 }
+    if (k >= HS_N) { return }
+    var j: byte = HS_N - 1
+    while (j > k) {                                // posun nižších záznamov
+        for i = 0 to HS_LEN - 1 { hsFile[2 + j * HS_LEN + i] = hsFile[2 + (j - 1) * HS_LEN + i] }
+        j = j - 1
+    }
+    var b: byte = scoreBase(p)
+    for i = 0 to 5 { hsFile[2 + k * HS_LEN + i] = scoreD[b + i] }
+    for i = 0 to 2 { hsFile[2 + k * HS_LEN + 6 + i] = name[i] }
+}
+
+function drawScores(row: byte, col: byte): void {
+    printAt(row, col + 1, T_HISCORE, 7)
+    for k = 0 to HS_N - 1 {
+        var a: uint16 = SCREEN + rowAddr(row + 2 + k * 2) + col
+        var ca: uint16 = a - SCREEN + COLRAM
+        poke(a, 49 + k)
+        for i = 0 to 2 { poke(a + 2 + i, hsFile[2 + k * HS_LEN + 6 + i]) }
+        for i = 0 to 5 { poke(a + 6 + i, 48 + hsFile[2 + k * HS_LEN + i]) }
+        for i = 0 to 11 { poke(ca + i, 1) }
+    }
+}
+
+function showTitle(): void {
+    clearScreen()
+    hideAll = false
+    printAt(2, 14, T_TITLE, 7)
+    printAt(3, 12, T_SUB, 2)
+    printAt(7, 10, T_L1, 5)
+    printAt(10, 10, T_L2, 1)
+    printAt(13, 10, T_L3, 4)
+    printAt(16, 10, T_L4, 7)
+    printAt(19, 10, T_L5, 2)
+    drawScores(6, 24)
+    printAt(22, 10, T_START, 1)
+    printAt(23, 3, T_JOIN2, 3)
+    printAt(24, 13, T_PAUSEK, 6)
+    if (saveErr) { printAt(0, 5, T_SAVEERR, 2) }
+    musicPlay(MUS_TITLE)
+}
+
+// Legenda príšer na titulke: sprity 1–6 (golem 2 polovice, stĺpce 4–9), text od stĺpca 10; ostatné skryté.
+// Poloha v súradniciach putSprite: x = 8·stĺpec − 24, y = 8·riadok − 23 (sprite vystredený na riadok textu).
+// putSprite je inline (12× za snímok v hre) – na titulke jedna neinline kópia namiesto 8 rozbalení (krok 9: +1 KB).
+function titleSpr(n: byte, x: byte, y: byte, col: byte, shape: byte): void { putSprite(n, x, y, col, shape) }
+
+function drawTitleSprites(frame: byte): void {
+    var f: byte = (frame >> 3) & 1
+    titleSpr(0, 0, 0, 0, 0)
+    titleSpr(1, 24, LEG_ROW[0] * 8 - 23, T_COLOR[M_SLIME], T_SPRITE[M_SLIME] + f)
+    titleSpr(2, 24, LEG_ROW[1] * 8 - 23, T_COLOR[M_SKEL], T_SPRITE[M_SKEL] + f)
+    titleSpr(3, 24, LEG_ROW[2] * 8 - 23, T_COLOR[M_SHADE], T_SPRITE[M_SHADE] + f)
+    titleSpr(4, 24, LEG_ROW[3] * 8 - 23, T_COLOR[M_THIEF], T_SPRITE[M_THIEF] + f)
+    titleSpr(5, 8, LEG_ROW[4] * 8 - 23, T_COLOR[M_BOSS], T_SPRITE[M_BOSS])
+    titleSpr(6, 32, LEG_ROW[4] * 8 - 23, T_COLOR[M_BOSS], T_SPRITE[M_BOSS] + 1)
+    for n = 7 to N_SPRITES - 1 { titleSpr(n, 0, 0, 0, 0) }
+}
+
+// --- zadanie mena (joystick hráča entryP) ---
+const NAME_CHARS: byte[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+                            25, 26, 32, 46, 33]                  // A–Z, medzera, bodka, výkričník
+var entryP: byte = 0
+var entryPos: byte = 0
+var entryIdx: byte = 0
+var entryName: byte[3] = [1, 1, 1]
+var entryRep: byte = 0
+
+function showEntry(p: byte): void {
+    entryP = p
+    entryPos = 0
+    entryIdx = 0
+    entryRep = 20
+    entryName[0] = 1
+    entryName[1] = 32
+    entryName[2] = 32
+    clearRows(2, 24)
+    hideAll = true
+    printAt(6, 17, T_PLAYERN, 1)
+    poke(SCREEN + rowAddr(6) + 24, 49 + p)
+    printAt(8, 13, T_NEWHS, 7)
+    printAt(11, 12, T_NAME, 1)
+    printAt(20, 7, T_HOWTO, 3)
+    drawEntry()
+}
+
+function drawEntry(): void {
+    var a: uint16 = SCREEN + rowAddr(14) + 18
+    var ca: uint16 = a - SCREEN + COLRAM
+    for i = 0 to 2 {
+        poke(a + i, entryName[i])
+        var col: byte = 1
+        if (i == entryPos) { col = 7 }
+        poke(ca + i, col)
+        var u: byte = 32
+        if (i == entryPos) { u = 45 }              // "-" pod aktuálnym písmenom
+        poke(a + 40 + i, u)
+        poke(ca + 40 + i, 7)
+    }
+}
+
+// Raz za snímok; vracia true, keď je meno hotové.
+function updateEntry(joy: byte, press: bool): bool {
+    if (entryRep != 0) { entryRep = entryRep - 1 }
+    var n: byte = (byte)NAME_CHARS.length
+    if (entryRep == 0) {
+        if (Joy.up(joy)) { entryIdx = entryIdx + 1  if (entryIdx >= n) { entryIdx = 0 }  entryRep = 8 }
+        if (Joy.down(joy)) { if (entryIdx == 0) { entryIdx = n - 1 } else { entryIdx = entryIdx - 1 }  entryRep = 8 }
+        entryName[entryPos] = NAME_CHARS[entryIdx]
+    }
+    if (press) {
+        entryPos = entryPos + 1
+        if (entryPos == 3) { return true }
+        entryIdx = 26                                  // ďalšie písmeno začína medzerou
+        entryName[entryPos] = 32
+        entryRep = 10
+    }
+    drawEntry()
+    return false
+}
+
+// --- klávesnica: RUN/STOP (riadok 7, stĺpec 7) – $DC00 sa vráti na $FF, aby klávesy nečítal joystick 1 ---
+function runStopDown(): bool {
+    poke($DC00, $7F)
+    var k: byte = peek($DC01)
+    poke($DC00, $FF)
+    return (k & $80) == 0
+}
+
+function showPaused(on: bool): void {
+    if (on) { printAt(1, 16, T_PAUSED, 1) }
+    else {
+        for i = 0 to 7 { poke(SCREEN + 40 + 16 + i, 32) }
+        if (isBoss) { showBossHp() }
+    }
+}

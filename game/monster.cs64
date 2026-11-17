@@ -343,7 +343,7 @@ function fireShot(i: byte, d: byte): bool {
             sy[k] = CELL_PX[mcy[i]]
             sdir[k] = d
             sbig[k] = 0
-            if (mkind[i] == M_BOSS) { sbig[k] = 1 }
+            if (mkind[i] == M_BOSS) { sbig[k] = 1  sfx(SFX_THROW) } else { sfx(SFX_SKEL) }
             return true
         }
     }
@@ -398,7 +398,7 @@ function moveMonster(i: byte): void {
         mcloak[i] = mcloak[i] - 1
         if (mcloak[i] == 0) {
             mshow[i] = mshow[i] ^ 1
-            if (mshow[i] != 0) { mcloak[i] = 50 } else { mcloak[i] = 150 + (rand8() & 63) }
+            if (mshow[i] != 0) { mcloak[i] = 50  sfx(SFX_SHADE) } else { mcloak[i] = 150 + (rand8() & 63) }
         }
     }
     if (moff[i] == 0 && decBudget == 0) { return }      // rozhodnutie až v ďalšom snímku
@@ -516,6 +516,7 @@ function killMonster(i: byte): void {
     claimCell(i, 255)
     mboom[i] = BOOM_TIME
     mresp[i] = 0
+    sfx(SFX_KILL)
     if (mkind[i] == M_THIEF) {
         thiefState = THIEF_DONE
         doubleNext = true                        // ďalšie podlažie dvojnásobné body
@@ -586,6 +587,7 @@ function spawnFloor(): void {
 // (Test 2026-11-16: z miesta objavenia 0 pri ľavom tuneli utiekol za ~0,7 s.)
 function spawnThief(): void {
     spawnMonster(0, M_THIEF)
+    sfx(SFX_THIEF)
     mcx[0] = 5
     mcy[0] = 3
     claimCell(0, 3 * MZ_W + 5)

@@ -65,6 +65,7 @@ function pickDir(joy: byte, cur: byte): byte {
 function closeTunnels(): void {
     tunShut = TUN_SHUT_TIME
     setTunnels(false)
+    sfx(SFX_TUNNEL)
 }
 
 function movePlayer(p: byte, joy: byte): void {
@@ -207,6 +208,7 @@ function killPlayer(p: byte): void {
     pstate[p] = PS_DYING
     ptimer[p] = DYING_TIME
     aon[p] = 0
+    sfx(SFX_DIE)
 }
 
 // Jeden snímok hráča podľa stavu (brána, živý – pohyb a streľba na stlačenie fire, výbuch).
@@ -267,6 +269,7 @@ function fireArrow(p: byte): void {
     ax[p] = px[p]
     ay[p] = py[p]
     adir[p] = pface[p]
+    sfx(SFX_SHOOT)
 }
 
 function moveArrow(p: byte): void {

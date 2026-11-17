@@ -1,0 +1,181 @@
+// ============================================================================
+//  Dungeon War – zvuk (krok 9, dizajn kap. 8)
+//  Hudba: GT2 skladba "assets/music" (tools/make_music) na $B000, init = báza (A = subtune), play = báza + 3,
+//    prehrávač volá IRQ std:mux2 (setMusicPlay). Subtunes: 0 titulka, 1 znelka podlažia, 2 koniec hry, 3 ticho.
+//    Počas hry GT2 nehrá – zapisuje všetky 3 hlasy každý snímok a bil by sa s efektmi.
+//  Efekty: vlastný interpret na hlasoch 1–2 (hlas 1 hráči, hlas 2 príšery a udalosti), 1 krok = 1 snímok.
+//  Podklad: hlas 3 hrá basovú linku, ktorej tempo rastie so zrýchlením príšer (speedBonus).
+// ============================================================================
+
+const A_MUSIC: uint16 = $B000
+const SID: uint16 = $D400
+var sidReg: byte[25] @ $D400           // registre SID ako pole: sidReg[v * 7 + k] → sta $D400,x
+const V7: byte[] = [0, 7, 14]
+
+// --- hudba GT2 ---
+const MUS_TITLE: byte = 0
+const MUS_JINGLE: byte = 1
+const MUS_OVER: byte = 2
+const MUS_SILENT: byte = 3
+
+function silenceSid(): void {
+    for i = 0 to $17 { sidReg[i] = 0 }
+    sidReg[$18] = 15
+}
+
+// Spustí subtune n (najprv odpojí prehrávač z IRQ, aby init nebežal súbežne s play).
+function musicPlay(n: byte): void {
+    bassOn = false
+    sfxOn[0] = 0
+    sfxOn[1] = 0
+    sei()                                        // setMusicPlay prepisuje operand JSR v IRQ po bajtoch –
+    Mux2.setMusicPlay(0)                         // IRQ medzi zápismi by skočilo na polovičnú adresu
+    cli()
+    silenceSid()
+    sys(A_MUSIC, n)
+    sei()
+    Mux2.setMusicPlay(A_MUSIC + 3)
+    cli()
+}
+
+function musicStop(): void {
+    sei()
+    Mux2.setMusicPlay(0)
+    cli()
+    silenceSid()
+}
+
+// --- efekty ---
+// Každý efekt: AD, SR, priebeh (bez GATE), potom horné bajty frekvencie po snímkoch, 0 = koniec.
+const SFX_SHOOT: byte = 0
+const SFX_KILL: byte = 1
+const SFX_DIE: byte = 2
+const SFX_SHADE: byte = 3
+const SFX_CHEST: byte = 4
+const SFX_TORCH: byte = 5
+const SFX_TUNNEL: byte = 6
+const SFX_THIEF: byte = 7
+const SFX_BOSSHIT: byte = 8
+const SFX_THROW: byte = 9
+const SFX_SKEL: byte = 10
+const SFX_BOSSDIE: byte = 11
+
+const SFX_DATA: byte[] = [
+    $00, $90, $41,  $30, $2C, $28, $24, $20, $1C, $18, 0,                                    // 0 výstrel
+    $00, $A0, $81,  $28, $22, $1C, $16, $12, $0E, $0B, $08, $06, 0,                          // 3+8 zásah
+    $08, $C0, $21,  $30, $2E, $2C, $2A, $28, $26, $24, $22, $20, $1E, $1C, $1A, $18, $16,
+                    $14, $12, $10, $0E, $0C, $0A, $08, $06, $05, $04, 0,                     // smrť hráča
+    $00, $80, $11,  $50, $58, $60, $58, $50, $58, $60, $58, 0,                               // tieň sa zjaví
+    $00, $90, $11,  $20, $28, $30, $40, $50, $60, $50, $60, 0,                               // truhlica
+    $00, $90, $41,  $18, $20, $28, $30, $38, $40, $48, $50, $58, $60, 0,                     // fakľa
+    $00, $C0, $81,  $06, $07, $08, $09, $08, $07, $06, $05, $04, $03, 0,                     // tunel
+    $00, $90, $41,  $60, $40, $60, $40, $60, $40, $70, $50, $70, $50, 0,                     // zlodej
+    $00, $B0, $81,  $10, $0C, $09, $07, $10, $0C, $09, $07, $05, 0,                          // zásah strážcu
+    $00, $A0, $21,  $0C, $0B, $0A, $09, $08, $07, $06, 0,                                    // hod balvana
+    $00, $80, $41,  $20, $1C, $18, $14, $10, 0,                                              // výstrel kostlivca
+    $08, $F0, $81,  $18, $16, $14, $12, $10, $0F, $0E, $0D, $0C, $0B, $0A, $09, $08, $07,
+                    $06, $05, $05, $04, $04, $03, $03, $02, $02, $02, $01, $01, 0            // smrť strážcu
+]
+const SFX_OFS:   byte[] = [0, 11, 24, 52, 64, 76, 90, 104, 118, 131, 142, 151]   // overené skriptom (181 B)
+const SFX_VOICE: byte[] = [0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1]
+const SFX_PRI:   byte[] = [1, 2, 9, 1, 3, 3, 2, 4, 5, 3, 1, 9]
+
+var sfxOn:  byte[2] = [0, 0]             // 0 = voľný, 1 = práve spustený (hard restart), 2 = hrá
+var sfxPos: byte[2] = [0, 0]
+var sfxWave: byte[2] = [0, 0]
+var sfxCur: byte[2] = [0, 0]             // priorita bežiaceho efektu
+var soundOn: bool = false                // efekty a podklad len počas hry (nie cez hudbu GT2)
+
+function sfx(id: byte): void {
+    if (!soundOn) { return }
+    var v: byte = SFX_VOICE[id]
+    if (sfxOn[v] != 0 && SFX_PRI[id] < sfxCur[v]) { return }
+    sfxPos[v] = SFX_OFS[id]
+    sfxCur[v] = SFX_PRI[id]
+    sfxOn[v] = 1
+}
+
+// Raz za snímok (po logike hry).
+function sfxTick(): void {
+    for v = 0 to 1 {
+        var st: byte = sfxOn[v]
+        if (st != 0) {
+            var r: byte = V7[v]
+            var p: byte = sfxPos[v]
+            if (st == 1) {                       // hard restart: test bit, nová obálka, šírka pulzu 50 %
+                sidReg[r + 4] = $08
+                sidReg[r + 5] = SFX_DATA[p]
+                sidReg[r + 6] = SFX_DATA[p + 1]
+                sidReg[r + 2] = 0
+                sidReg[r + 3] = 8
+                sfxWave[v] = SFX_DATA[p + 2]
+                sfxPos[v] = p + 3
+                sfxOn[v] = 2
+            } else {
+                var f: byte = SFX_DATA[p]
+                if (f == 0) {
+                    sidReg[r + 4] = sfxWave[v]   // gate off → release
+                    sfxOn[v] = 0
+                    sfxCur[v] = 0
+                } else {
+                    sidReg[r] = 0
+                    sidReg[r + 1] = f
+                    sidReg[r + 4] = sfxWave[v] | 1
+                    sfxPos[v] = p + 1
+                }
+            }
+        }
+    }
+    bassTick()
+}
+
+// --- podklad na hlase 3 ---
+// a mol: A1 A1 E2 A1 | A1 A1 E2 A1 | F1 F1 C2 F1 | G1 G1 D2 E2 (registre PAL)
+const BASS_LO: byte[] = [$A9, $A9, $7B, $A9, $A9, $A9, $7B, $A9, $E7, $E7, $5A, $E7, $42, $42, $E2, $7B]
+const BASS_HI: byte[] = [$03, $03, $05, $03, $03, $03, $05, $03, $02, $02, $04, $02, $03, $03, $04, $05]
+var bassOn: bool = false
+var bassI: byte = 0
+var bassT: byte = 1
+var bassLen: byte = 12
+
+function bassStart(): void {
+    soundOn = true
+    sfxOn[0] = 0
+    sfxOn[1] = 0
+    musicStop()
+    sidReg[14 + 5] = $0A                  // AD: rýchly nábeh, stredný doznev
+    sidReg[14 + 6] = $00
+    bassI = 0
+    bassT = 1
+    bassOn = true
+}
+
+function bassStop(): void {
+    bassOn = false
+    soundOn = false
+    sidReg[14 + 4] = $20
+    sidReg[4] = 0
+    sidReg[7 + 4] = 0
+    sfxOn[0] = 0
+    sfxOn[1] = 0
+}
+
+function bassTick(): void {
+    if (!bassOn) { return }
+    bassT = bassT - 1
+    if (bassT == 3) { sidReg[14 + 4] = $20 }  // gate off pred ďalšou notou (nová obálka)
+    if (bassT != 0) { return }
+    var len: byte = 12                           // tempo podľa zrýchlenia príšer: 12 → najmenej 5 snímok
+    var b: byte = speedBonus
+    while (b >= 12 && len > 5) { b = b - 12  len = len - 1 }
+    bassT = len
+    sidReg[14] = BASS_LO[bassI]
+    sidReg[15] = BASS_HI[bassI]
+    sidReg[14 + 4] = $21
+    bassI = (bassI + 1) & 15
+}
+
+// Pauza: stíšiť / obnoviť hlasitosť.
+function soundPause(on: bool): void {
+    if (on) { sidReg[$18] = 0 } else { sidReg[$18] = 15 }
+}
