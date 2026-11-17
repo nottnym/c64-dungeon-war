@@ -16,15 +16,15 @@ const M_BOSS: byte = 5                  // strážca hĺbky (krok 8, boss.cs64)
 const T_SPEED:  byte[] = [0, 128, 160, 224, 255, 96] // pixely za snímok × 256
 const T_SPRITE: byte[] = [0, 136, 144, 152, 160, 162] // slizák 8–15, kostlivec 16–23, tieň 24–31, zlodej 32–33, golem 34–35
 const T_COLOR:  byte[] = [0, 13, 15, 4, 7, 12]       // svetlozelená, svetlosivá, fialová, žltá, sivá
-const T_POINTS: byte[] = [0, 1, 2, 5, 10, 25]        // stovky bodov (zlodej 1000, strážca 2500 – hitBoss)
+const T_POINTS: byte[] = [0, 1, 2, 5, 10, 0]         // stovky bodov, najviac 10 (addScore); strážca 2500 v hitBoss
 const T_RADAR:  byte[] = [0, 5, 1, 4, 7, 2]          // farba bodky na radare (hires znak → < 8)
 
 // Rýchlosť typu + zrýchlenie podlažia (floor.cs64), najviac 255; zlodej vždy najrýchlejší.
 function speedOf(t: byte): byte {
     if (t == M_THIEF) { return 255 }
     var s: byte = T_SPEED[t]
-    if (t == M_BOSS) { s = s + bossBoost }       // strážca zrýchľuje po každom zásahu
     var b: byte = speedBonus
+    if (t == M_BOSS) { s = s + bossBoost  b = baseBonus }   // strážca: zásahy, bez bonusu za ≤ 2 príšery (review k8 č. 5)
     if (b > 255 - s) { return 255 }
     return s + b
 }

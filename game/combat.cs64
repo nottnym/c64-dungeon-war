@@ -28,14 +28,14 @@ function collide(): void {
                 var hit: bool = false
                 var hx: byte = HIT_ARROW                 // strážca je široký 2 sprity (boss.cs64)
                 var hy: byte = HIT_ARROW
-                var bx: byte = HIT_BODY
-                if (mkind[i] == M_BOSS) { hx = HIT_BOSS_X  hy = HIT_BOSS_Y  bx = HIT_BOSS_X }
+                var boss: bool = mkind[i] == M_BOSS
+                if (boss) { hx = HIT_BOSS_AX  hy = HIT_BOSS_AY }   // šíp: < 16 (near pretečie), za stenou nie (review k8 č. 1, 2)
                 if (aon[p] != 0) {
                     if (near(ax[p], mx, hx)) {
                         if (near(ay[p], my, hy)) {
                             hit = true
                             aon[p] = 0
-                            if (mkind[i] == M_BOSS) { hitBoss(p) }
+                            if (boss) { hitBoss(p) }
                             else {
                                 award(p, 3, T_POINTS[mkind[i]])  // 100 / 200 / 500 / 1000 bodov (floor.cs64)
                                 killMonster(i)
@@ -44,7 +44,10 @@ function collide(): void {
                     }
                 }
                 if (!hit && alive && mkind[i] != M_THIEF) {   // zlodej je bonusový cieľ – dotykom nezabíja
-                    if (near(ppx, mx, bx)) {
+                    var bodyX: bool = false
+                    if (boss) { bodyX = absDiff(ppx, mx) < HIT_BOSS_X }   // 20 > 16: near by pretieklo (stĺpec 0 vs 10)
+                    else { bodyX = near(ppx, mx, HIT_BODY) }
+                    if (bodyX) {
                         if (near(ppy, my, HIT_BODY)) {
                             killPlayer(p)
                             alive = false

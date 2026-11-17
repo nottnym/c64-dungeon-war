@@ -13,8 +13,11 @@ const BOSS_THROW_SHOW: byte = 25         // 0,5 s viditeľný pri hode balvana
 const BOSS_FLASH: byte = 12              // biele zablysnutie po zásahu
 const BOSS_X: byte = 5                   // miesto objavenia: horný stred bludiska
 const BOSS_Y: byte = 0
-const HIT_BOSS_X: byte = 20              // golem je široký 2 sprity: šíp/dotyk vodorovne |dx| < 20
-const HIT_BOSS_Y: byte = 12
+const HIT_BOSS_X: byte = 20              // dotyk: golem je široký 2 sprity, vodorovne |dx| < 20 (absDiff, nie near)
+// Šíp: advance ho zastaví až 12 px od stredu susednej bunky – väčší limit by trafil golema cez stenu; limit musí byť
+// aj < 16 (near: 0 - 240 = 16 v bajte). Otvoreným priechodom šíp prejde stredom bunky golema, takže nič nestratí.
+const HIT_BOSS_AX: byte = 12
+const HIT_BOSS_AY: byte = 10
 const SPR_BOULDER: byte = 166            // balvan = sprite 38
 const COL_BOULDER: byte = 12
 const BOULDER_SPEED: byte = 2
@@ -74,6 +77,8 @@ function hitBoss(p: byte): void {
     bossHp = bossHp - 1
     showBossHp()
     if (bossHp == 0) {
+        bossFlash = 0                    // výbuch nie biely (tickBoss sa po smrti nevolá – review k8 č. 3)
+        bossShow = 0
         award(p, 2, 2)                   // 2000
         award(p, 3, 5)                   // + 500
         killMonster(0)
@@ -92,6 +97,8 @@ function tickBoss(): void {
 }
 
 // Sprite so 16-bitovou polohou X (ľavá polovica golema môže byť vľavo od bludiska) – inak ako putSprite v dungeon.cs64.
+// Pozor: sprX tu drží spodný bajt obrazovkového X, putSprite pixel bludiska – pri prechode sprite 1/2 medzi nimi musí
+// zmeniť tvar alebo prejsť skrytím (beginIntro/hideAll), inak sa poloha nemusí prepísať (review k8 č. 6).
 function putWide(n: byte, x: uint16, y: byte, col: byte, shape: byte): void {
     if (shape == 0) {
         if (sprS[n] != 0) { Mux2.hide(n)  sprS[n] = 0 }

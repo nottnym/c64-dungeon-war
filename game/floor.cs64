@@ -61,6 +61,7 @@ function award(p: byte, pos: byte, v: byte): void {
 
 // --- zrýchľovanie (kap. 5): podľa podlažia, každých 20 s, keď ostanú najviac 2 príšery ---
 var speedBonus: byte = 0
+var baseBonus: byte = 0                  // bez +24 za ≤ 2 príšery (strážca)
 var secFrames: byte = 0
 var floorSecs: byte = 0
 
@@ -81,8 +82,10 @@ function updateSpeed(): void {
     var t: byte = floorSecs
     while (t >= 20 && steps < 5) { t = t - 20  steps = steps + 1 }
     b = b + steps * 8
+    var nb: byte = b
     if (aliveMonsters() <= 2) { b = b + 24 }
-    if (b != speedBonus) {
+    if (b != speedBonus || nb != baseBonus) {
+        baseBonus = nb
         speedBonus = b
         for i = 0 to MAX_MON - 1 { if (mtype[i] != M_NONE) { mspd[i] = speedOf(mkind[i]) } }
     }

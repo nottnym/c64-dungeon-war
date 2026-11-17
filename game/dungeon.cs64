@@ -280,6 +280,7 @@ function startFloor(): void {
     clearItems()
     thiefState = THIEF_NONE
     speedBonus = 0
+    baseBonus = 0
     floorSecs = 0
     secFrames = 0
     doubleNow = doubleNext

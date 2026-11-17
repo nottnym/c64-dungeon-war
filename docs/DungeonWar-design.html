@@ -573,6 +573,25 @@ golem sa po zásahoch zrýchľuje, výbuch, +2500, zlodej, bonus 250, „FLOOR 0
 prehliadača nedá ovládať spoľahlivo; treba zahrať ručne.</li>
 </ul>
 
+<h3>Code review kroku 8 (nezávislý agent, 2026-11-17) – opravené</h3>
+<table>
+<tr><th>#</th><th>Nález</th><th>Riešenie</th></tr>
+<tr><td>1</td><td><b>Vysoká:</b> <code>near</code> počíta rozdiel v bajte – stĺpce 0 a 10 (x 0 a 240) dajú 16; s limitom golema 20
+golem zabil hráča a dal sa trafiť cez celé bludisko.</td><td>Dotyk golema vodorovne cez <code>absDiff</code> (bez pretečenia),
+limit šípu 12 (&lt; 16).</td></tr>
+<tr><td>2</td><td><b>Stredná:</b> šíp sa zastaví až 12 px od stredu susednej bunky – s limitom 20 trafil golema cez stenu.</td>
+<td>Šíp ±12 × ±10 px (<code>HIT_BOSS_AX/AY</code>); otvoreným priechodom prejde stredom bunky golema.</td></tr>
+<tr><td>3</td><td>Pri smrteľnom zásahu do 12 snímok po predošlom bol výbuch biely (<code>bossFlash</code> po smrti neklesá).</td>
+<td><code>hitBoss</code> pri smrti nuluje <code>bossFlash</code> a <code>bossShow</code>.</td></tr>
+<tr><td>4</td><td><code>T_POINTS</code> golema = 25, <code>addScore</code> znesie najviac 10.</td><td>0 + poznámka (body dáva <code>hitBoss</code>).</td></tr>
+<tr><td>5</td><td>Podlažie bossa má 3 príšery – po zabití tieňa platí bonus +24 za ≤ 2 príšery skoro celý súboj.</td>
+<td>Golem používa <code>baseBonus</code> (bez +24); zrýchľuje ho podlažie, čas a zásahy.</td></tr>
+<tr><td>6</td><td><code>putWide</code> a <code>putSprite</code> majú v <code>sprX</code> iný význam.</td><td>Dnes bezpečné (prechod cez
+skrytie alebo zmenu tvaru) – poznámka v kóde.</td></tr>
+</table>
+<p>Po opravách koniec kódu <code>$68F9</code>; hra v C64U Code štartuje, podlažie 1 beží. Zásah šípom, dotyk (stĺpec 0 vs 10)
+a balvany treba ešte zahrať ručne.</p>
+
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
 <ul><li><code>player.cs64</code>: stojaci hráč čelom k stene + joystick do protismeru → len otočenie (<code>pturn</code>,
 10 snímok); pohyb pri ďalšom stlačení alebo dlhšom držaní. Overené: v bunke (4,0) otočenie doprava → doľava bez
