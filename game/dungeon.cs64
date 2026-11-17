@@ -349,24 +349,31 @@ function main(): void {
         printAt(12, 9, T_LOADERR, 2)
         while (true) { }
     }
+    initSystem()                           // zariadenie, NMI
     loadScores()                           // pred spustením multiplexera (KERNAL LOAD)
     poke(1, $36)                           // BASIC ROM preč: CPU musí na $A000-$BFFF čítať RAM (hudba GT2 na $B000)
     initVideo()
     clearScreen()
     initSprites()
     showTitle()
-    var firePrev: bool = true
+    var firePrev0: bool = true
+    var firePrev1: bool = true
     var frame: byte = 0
     poke(DEBUG_LEVEL, 0)
     poke(DBG_T, 0)                         // meranie od nuly (review č. 7)
     poke(DBG_T + 1, 0)
     while (true) {
         Mux2.waitFrame()                   // 1. začiatok snímku
+        poke($DC00, $FF)                   // žiadny riadok klávesnice – klávesy nečíta joystick 1 (review k9 č. 5)
         var joy: byte = Joy.read2()        // 2. logika – hráč 1 port 2
         var joy1: byte = Joy.read1()       //            hráč 2 port 1
-        var fire: bool = Joy.fire(joy) || Joy.fire(joy1)
-        var press: bool = fire && !firePrev   // nové stlačenie (code review č. 6)
-        firePrev = fire
+        var f0: bool = Joy.fire(joy)
+        var f1: bool = Joy.fire(joy1)
+        var press0: bool = f0 && !firePrev0   // nové stlačenie, každý port zvlášť (review k9 č. 6)
+        var press1: bool = f1 && !firePrev1
+        firePrev0 = f0
+        firePrev1 = f1
+        var press: bool = press0 || press1
         frame = frame + 1
         var dbg: byte = peek(DEBUG_LEVEL)          // ladenie: nová hra na podlaží dbg
         if (dbg != 0 && dbg <= 24) {
@@ -390,15 +397,15 @@ function main(): void {
             if (stateTimer == 0) { afterGame(0) }
         } else { if (state == ST_ENTRY) {
             var ej: byte = joy
-            var ep: bool = press && Joy.fire(joy)
-            if (entryP == 1) { ej = joy1  ep = press && Joy.fire(joy1) }
+            var ep: bool = press0
+            if (entryP == 1) { ej = joy1  ep = press1 }
             if (updateEntry(ej, ep)) {
                 insertScore(entryP, entryName)
                 saveErr = !saveScores()           // hlášku ukáže titulka (showTitle)
                 afterGame(entryP + 1)
             }
         } else {
-            var stop: bool = runStopDown()         // RUN/STOP = pauza
+            var stop: bool = joy == 0 && runStopDown()   // RUN/STOP = pauza; joystick 2 by vybral iné riadky (review k9 č. 5)
             if (stop && !stopPrev) {
                 paused = !paused
                 soundPause(paused)

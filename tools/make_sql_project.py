@@ -84,10 +84,11 @@ def mssql(items, pid, user):
         h = '0x' + data.hex().upper()
         st = START.get(path)
         st = 'NULL' if st is None else str(st)
-        out += [f'UPDATE ProjectItem SET Content = {h}, CommonStartAddress = {st}, ChangedDate = SYSDATETIME(), '
-                f'ChangedById = \'{user}\' '
-                f'WHERE ProjectId = @p AND Path = {s(path)} AND SourceTypeId = {typ} '
-                f'AND (Content <> {h} OR ISNULL(CommonStartAddress, -1) <> ISNULL({st}, -1)); '
+        # podľa cesty – aj zmena typu (napr. BIN → SIDTRACK) sa prepíše (review k9 č. 11)
+        out += [f'UPDATE ProjectItem SET Content = {h}, SourceTypeId = {typ}, CommonStartAddress = {st}, '
+                f'ChangedDate = SYSDATETIME(), ChangedById = \'{user}\' '
+                f'WHERE ProjectId = @p AND Path = {s(path)} '
+                f'AND (Content <> {h} OR SourceTypeId <> {typ} OR ISNULL(CommonStartAddress, -1) <> ISNULL({st}, -1)); '
                 'SET @n = @n + @@ROWCOUNT;',
                 f'IF NOT EXISTS (SELECT 1 FROM ProjectItem WHERE ProjectId = @p AND Path = {s(path)}) BEGIN '
                 'INSERT INTO ProjectItem (ProjectId, Path, SourceTypeId, Content, CommonStartAddress, CreatedDate, '
@@ -122,10 +123,11 @@ def pg(items, pid, user):
         h = f"'\\x{data.hex()}'::bytea"
         st = START.get(path)
         st = 'NULL' if st is None else str(st)
-        out += [f'    UPDATE "ProjectItem" SET "Content" = {h}, "CommonStartAddress" = {st}, '
+        out += [f'    UPDATE "ProjectItem" SET "Content" = {h}, "SourceTypeId" = {typ}, "CommonStartAddress" = {st}, '
                 f'"ChangedDate" = localtimestamp, "ChangedById" = \'{u}\' '
-                f'WHERE "ProjectId" = p AND "Path" = {s(path)} AND "SourceTypeId" = {typ} '
-                f'AND ("Content" IS DISTINCT FROM {h} OR "CommonStartAddress" IS DISTINCT FROM {st});',
+                f'WHERE "ProjectId" = p AND "Path" = {s(path)} '
+                f'AND ("Content" IS DISTINCT FROM {h} OR "SourceTypeId" <> {typ} '
+                f'OR "CommonStartAddress" IS DISTINCT FROM {st});',
                 '    GET DIAGNOSTICS c = ROW_COUNT; n := n + c;',
                 f'    IF NOT EXISTS (SELECT 1 FROM "ProjectItem" WHERE "ProjectId" = p AND "Path" = {s(path)}) THEN',
                 '        INSERT INTO "ProjectItem" ("ProjectId", "Path", "SourceTypeId", "Content", '

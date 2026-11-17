@@ -43,10 +43,61 @@ function loadScores(): void {
     if (!loadFile("DW SCORES")) { defaultScores() }
 }
 
+// Výmena s asm (premenné C#64 v asm{} nie sú viditeľné): [0] zariadenie, [1–2] prvé dve číslice odpovede mechaniky
+// (kanál 15, "00" = OK; $FF = kanál sa nedal otvoriť), [3] = RTI pre NMI (RUN/STOP + RESTORE).
+var dosIo: byte[4] @ $02A7
+var bootDev: byte = 8                    // mechanika, z ktorej sa hra spustila (review k9 č. 4)
+
+// Pri štarte (pred prvým loadFile): zariadenie z $BA, NMI na RTI – KERNAL NMI pri STOP skáče cez ($A002), čo je
+// s vypnutým BASIC ROM RAM so spritmi (review k9 č. 7).
+function initSystem(): void {
+    var d: byte = peek($BA)
+    if (d < 8) { d = 8 }
+    bootDev = d
+    dosIo[3] = $40
+    sei()
+    poke($0318, $AA)
+    poke($0319, $02)
+    cli()
+}
+
+// Prečíta odpoveď mechaniky z kanála 15 (SETLFS 15,dev,15 / SETNAM "" / OPEN / CHKIN / 2× CHRIN / CLRCHN / CLOSE).
+function readDosStatus(): void {
+    dosIo[0] = bootDev
+    asm {
+        lda #$FF
+        sta $02A8
+        sta $02A9
+        lda #15
+        ldx $02A7
+        ldy #15
+        jsr $FFBA
+        lda #0
+        jsr $FFBD
+        jsr $FFC0
+        bcs dw_dsend
+        ldx #15
+        jsr $FFC6
+        bcs dw_dsclose
+        jsr $FFCF
+        sta $02A8
+        jsr $FFCF
+        sta $02A9
+    dw_dsclose:
+        jsr $FFCC
+        lda #15
+        jsr $FFC3
+    dw_dsend:
+    }
+}
+
 // Zápis na disk: multiplexer na chvíľu zastaví a vráti KERNAL IRQ (CIA časovač), potom ho znova spustí.
+// Meno malými písmenami – reťazec sa prekladá ako PETSCII a veľké písmená by boli shiftnuté ($C4 $D7 …), iné meno než
+// "DW SCORES" v adresári a ",W" by DOS nepoznal (review k9 č. 1).
 function saveScores(): bool {
     hsFile[0] = $00
     hsFile[1] = $94
+    musicStop()                                // nič nedoznieva počas zápisu (review k9 č. 8)
     sei()
     Mux2.stop()
     poke($D015, 0)
@@ -54,8 +105,11 @@ function saveScores(): bool {
     poke($0315, $EA)
     poke($DC0D, $81)
     cli()
-    saveFile(hsFile, "@0:DW SCORES,P,W", 8)
+    saveFile(hsFile, "@0:dw scores,p,w", bootDev)
     var ok: bool = ioResult() == 0
+    readDosStatus()                            // ioResult nevidí chyby DOS-u (ochrana, plný disk…) – review k9 č. 3
+    if (dosIo[1] != 48 || dosIo[2] != 48) { ok = false }
+    poke($DC00, $FF)                           // KERNAL sken klávesnice nechá $DC00 = $7F (review k9 č. 5)
     sei()
     irq(frameIrq)
     Mux2.start()
@@ -119,7 +173,16 @@ function showTitle(): void {
     printAt(22, 10, T_START, 1)
     printAt(23, 3, T_JOIN2, 3)
     printAt(24, 13, T_PAUSEK, 6)
-    if (saveErr) { printAt(0, 5, T_SAVEERR, 2) }
+    if (saveErr) {                                 // + kód mechaniky (2 číslice, "??" = kanál 15 nedostupný)
+        printAt(0, 3, T_SAVEERR, 2)
+        var c1: byte = dosIo[1]
+        var c2: byte = dosIo[2]
+        if (c1 == $FF) { c1 = 63  c2 = 63 }
+        poke(SCREEN + 34, c1)
+        poke(SCREEN + 35, c2)
+        poke(COLRAM + 34, 2)
+        poke(COLRAM + 35, 2)
+    }
     musicPlay(MUS_TITLE)
 }
 

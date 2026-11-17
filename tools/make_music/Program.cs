@@ -153,22 +153,28 @@ static void Verify(byte[] image)
     {
         var emu = new C64U_Code.Shared.Emulation.Emu6502();
         Array.Copy(image, 0, emu.Mem, MUSIC_BASE, image.Length);
-        for (int i = 0x200; i < 0x10000; i++) if (i < MUSIC_BASE || i >= 0xC000) emu.Mem[i] = 0x55;
+        for (int i = 0x0002; i < 0x10000; i++)            // aj nulová stránka (review k9 č. 10); zásobník necháme
+            if ((i < 0x0100 || i >= 0x0200) && (i < MUSIC_BASE || i >= 0xC000)) emu.Mem[i] = 0x55;
         byte[] before = (byte[])emu.Mem.Clone();
         emu.CallSub(MUSIC_BASE, (byte)sub, 10_000);
         long maxSteps = 0;
+        var notes = new HashSet<(int, byte)>();             // (hlas, horný bajt frekvencie) pri zapnutom GATE
         for (int f = 0; f < 500; f++)
         {
             long s0 = emu.Cycles;
             emu.CallSub(MUSIC_BASE + 3, 0, 20_000);
             maxSteps = Math.Max(maxSteps, emu.Cycles - s0);
+            for (int ch = 0; ch < 3; ch++)
+                if ((emu.Mem[0xD404 + ch * 7] & 1) != 0) notes.Add((ch, emu.Mem[0xD401 + ch * 7]));
 
         }
-        for (int a = 0x200; a < 0x10000; a++)
+        for (int a = 0x0002; a < 0x10000; a++)
         {
-            bool allowed = (a >= MUSIC_BASE && a < 0xC000) || (a >= 0xD400 && a <= 0xD418) || a >= 0x0100 && a < 0x0200;
+            bool allowed = (a >= MUSIC_BASE && a < 0xC000) || (a >= 0xD400 && a <= 0xD418) || (a >= 0x0100 && a < 0x0200)
+                           || a == 0x02 || a == 0x03;      // ZP prehrávača (zpbase = $02)
             if (!allowed && emu.Mem[a] != before[a]) throw new Exception($"subtune {sub}: zápis na ${a:X4}");
         }
-        Console.WriteLine($"subtune {sub}: OK, play najviac {maxSteps} cyklov");
+        Console.WriteLine($"subtune {sub}: OK, play najviac {maxSteps} cyklov, rôznych tónov s GATE: {notes.Count}");
+        if (sub < 3 && notes.Count < 3) throw new Exception($"subtune {sub}: skladba nehrá (len {notes.Count} tónov)");
     }
 }

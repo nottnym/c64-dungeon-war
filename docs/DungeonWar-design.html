@@ -612,7 +612,7 @@ skóre, „PRESS FIRE TO START“, nápoveda k hráčovi 2 a pauze. Stavy v <cod
 <li><b>Najvyššie skóre</b>: 5 × (6 číslic + 3 znaky) na <code>$9400</code>, súbor „DW SCORES“ (<code>tools/make_scores.py</code>,
 predvolene 5000–1000 „DW“). Nahrá sa pri štarte (<code>loadFile</code>), po novom zázname sa zapíše
 <code>saveFile(hsFile, "@0:DW SCORES,P,W", 8)</code> – <code>hsFile</code> je pole na pevnej adrese <code>$93FE</code> s hlavičkou PRG.
-Na zápis sa multiplexer zastaví, vráti sa KERNAL IRQ (<code>$EA31</code>, CIA), po zápise sa reťaz spustí znova. Zadanie mena
+Meno malými písmenami (<code>"@0:dw scores,p,w"</code>, review k9). Na zápis sa multiplexer zastaví, vráti sa KERNAL IRQ (<code>$EA31</code>, CIA), po zápise sa reťaz spustí znova. Zadanie mena
 joystickom hráča (hore/dole písmeno, fire ďalej). Pri chybe zápisu titulka ukáže „DISK ERROR – SCORES NOT SAVED“.</li>
 <li><b>Pauza</b> RUN/STOP (stĺpec 7 riadku 7 klávesnice, <code>$DC00</code> sa hneď vráti na <code>$FF</code>, aby klávesy nečítal
 joystick 1): „PAUSED“ v riadku 1, hlasitosť 0.</li>
@@ -624,10 +624,33 @@ tam chyba nebola). Sprity na <code>$A000</code> to netrápilo (VIC číta RAM).<
 obrazovku <code>$8400</code> ~1 KB.</li>
 <li>Test v C64U Code (2026-11-17): titulka s legendou a tabuľkou (aj po nahratí „DW SCORES“), štart fire, znelka/úvod „FLOOR 01“,
 hra, pauza RUN/STOP, koniec hry → zadanie mena (dočasný test +2000 bodov) → zaradenie do tabuľky (pri rovnosti nižšie) → návrat na
-titulku so spritmi (multiplexer po zápise beží). <b>Zápis na disk vo vstavanom emulátore zlyhá</b> (aj do nového súboru bez
-<code>@0:</code>) – overiť na C64U / VICE, či ide o virtuálnu mechaniku emulátora alebo o postup ukladania. Zvuk som nepočul –
+titulku so spritmi (multiplexer po zápise beží). Zápis na disk najprv zlyhal – príčinou bolo meno súboru (code review kroku 9, č. 1); po oprave prešiel. Zvuk som nepočul –
 hudbu a efekty treba posúdiť ušami.</li>
 </ul>
+
+<h3>Code review kroku 9 (nezávislý agent, 2026-11-17) – opravené</h3>
+<table>
+<tr><th>#</th><th>Nález</th><th>Riešenie</th></tr>
+<tr><td>1</td><td><b>Vysoká:</b> meno súboru v <code>saveFile</code> sa prekladá ako PETSCII – veľké písmená shiftnuté
+(<code>$C4 $D7 …</code>), iné meno než „DW SCORES“ a <code>,W</code> nerozpoznané. <b>Príčina zlyhania zápisu v emulátore.</b></td>
+<td><code>"@0:dw scores,p,w"</code> (bajty <code>$44 $57 …</code>). Overené v C64U Code: zápis prešiel, odpoveď mechaniky „00“.</td></tr>
+<tr><td>2</td><td><b>Vysoká:</b> priebehy efektov mali bit GATE – „gate off“ ho nevypol, po efekte znel trvalý tón.</td>
+<td><code>sfxWave = … &amp; $FE</code>.</td></tr>
+<tr><td>3</td><td><code>ioResult()</code> nevidí chyby DOS-u (ochrana, plný disk, syntax).</td><td>Po zápise sa číta kanál 15
+(asm: SETLFS 15,dev,15 / OPEN / CHKIN / 2× CHRIN); iné než „00“ = chyba, kód sa ukáže na titulke.</td></tr>
+<tr><td>4</td><td>Zápis napevno na zariadenie 8, načítanie z mechaniky spustenia.</td><td><code>bootDev</code> z <code>$BA</code>.</td></tr>
+<tr><td>5</td><td>KERNAL nechá <code>$DC00 = $7F</code> – mimo hry klávesy ako joystick 1; joystick 2 mohol spustiť pauzu.</td>
+<td><code>$DC00 = $FF</code> každý snímok a po zápise; RUN/STOP len pri pustenom joysticku 2.</td></tr>
+<tr><td>6</td><td>Spoločná hrana fire pre oba porty – držaný fire druhého hráča blokoval zadanie mena.</td><td>Hrana pre každý port.</td></tr>
+<tr><td>7</td><td>RUN/STOP + RESTORE s vypnutým BASIC ROM skočí cez <code>($A002)</code> do spritov.</td><td>NMI vektor na RTI
+(<code>$02AA</code>).</td></tr>
+<tr><td>8</td><td>Počas zápisu mohol doznievať tón.</td><td><code>musicStop()</code> pred zápisom.</td></tr>
+<tr><td>9</td><td>Hard restart efektov len 1 snímok (ADSR bug).</td><td>Ponechané – posúdiť ušami na zariadení.</td></tr>
+<tr><td>10</td><td>Kontrola v <code>make_music</code> nesledovala nulovú stránku.</td><td>Sleduje celú pamäť okrem zásobníka; navyše
+overí, že skladba hrá (tóny s GATE: titulka 30, znelka 19, koniec 16).</td></tr>
+<tr><td>11</td><td><code>make_sql_project.py</code> neprepísal položku pri zmene typu.</td><td>UPDATE podľa cesty, aj <code>SourceTypeId</code>.</td></tr>
+</table>
+<p>Po opravách koniec kódu <code>$80A3</code> (rezerva po <code>$8400</code> ~860 B).</p>
 
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
 <ul><li><code>player.cs64</code>: stojaci hráč čelom k stene + joystick do protismeru → len otočenie (<code>pturn</code>,

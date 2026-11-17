@@ -108,7 +108,7 @@ function sfxTick(): void {
                 sidReg[r + 6] = SFX_DATA[p + 1]
                 sidReg[r + 2] = 0
                 sidReg[r + 3] = 8
-                sfxWave[v] = SFX_DATA[p + 2]
+                sfxWave[v] = SFX_DATA[p + 2] & $FE  // bez GATE – inak by gate off nikdy nenastal (review k9 č. 2)
                 sfxPos[v] = p + 3
                 sfxOn[v] = 2
             } else {
