@@ -296,7 +296,13 @@ var sown: byte[2] = [0, 0]                // príšera, ktorá strelu vystrelila
 var sbig: byte[2] = [0, 0]                // 1 = balvan strážcu (pomalší, iný sprite)
 
 // Vidí kostlivec niektorého živého hráča v rovnej chodbe? Vracia smer alebo 0.
+// Kostlivec nestrieľa na hráča bližšie ako SKEL_MIN_DIST buniek – zblízka (napr. hneď po objavení) by sa strele nedalo
+// uhnúť (úprava 2026-11-17). Strážca hĺbky hádže balvany bez tohto obmedzenia.
+const SKEL_MIN_DIST: byte = 3
+var seeMin: byte = 1                     // najmenšia vzdialenosť v bunkách, na ktorú seesCell hlási hráča
 function seesPlayer(i: byte): byte {
+    seeMin = 1
+    if (mkind[i] == M_SKEL) { seeMin = SKEL_MIN_DIST }
     for p = 0 to 1 {
         if (pstate[p] == PS_ALIVE) {
             var d: byte = seesCell(i, pcx[p], pcy[p])
@@ -310,13 +316,16 @@ function seesCell(i: byte, tx: byte, ty: byte): byte {
     var cx: byte = mcx[i]
     var cy: byte = mcy[i]
     var d: byte = 0
+    var n: byte = 0                              // počet buniek k hráčovi (bližšie ako seeMin → nevidí)
     if (cy == ty && cx != tx) {
         d = D_RIGHT
         if (tx < cx) { d = D_LEFT }
         while (cx != tx) {
             if (!monCanGo(cx, cy, d)) { return 0 }
             if (d == D_RIGHT) { cx = cx + 1 } else { cx = cx - 1 }
+            n = n + 1
         }
+        if (n < seeMin) { return 0 }
         return d
     }
     if (cx == tx && cy != ty) {
@@ -325,7 +334,9 @@ function seesCell(i: byte, tx: byte, ty: byte): byte {
         while (cy != ty) {
             if (!monCanGo(cx, cy, d)) { return 0 }
             if (d == D_DOWN) { cy = cy + 1 } else { cy = cy - 1 }
+            n = n + 1
         }
+        if (n < seeMin) { return 0 }
         return d
     }
     return 0

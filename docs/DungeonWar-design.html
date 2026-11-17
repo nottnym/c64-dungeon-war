@@ -267,8 +267,8 @@ nepravidelného trhania.</li>
 pixelov do ďalšieho stredu).</li>
 <li><b>Slizák:</b> na križovatke z voľných smerov (bez otočenia späť) vyberie ten, ktorý zmenší vzdialenosť
 (Manhattan) k bližšiemu hráčovi; s pravdepodobnosťou 25 % náhodne.</li>
-<li><b>Kostlivec:</b> ako slizák; ak je hráč v tom istom riadku/stĺpci bez steny medzi nimi, zastaví a vystrelí
-(cooldown 1,5 s).</li>
+<li><b>Kostlivec:</b> ako slizák; ak je hráč v tom istom riadku/stĺpci bez steny medzi nimi a aspoň 3 bunky ďaleko, zastaví
+a vystrelí (cooldown 1,5 s).</li>
 <li><b>Tieň:</b> mapa vzdialeností od hráčov (BFS po 66 bunkách, prepočet 1× za 8 snímkov, stačí 66 B) – ide
 najkratšou cestou; neviditeľnosť podľa časovača a vzdialenosti.</li>
 <li><b>Zlodej:</b> rovnaká BFS mapa, ale od tunelov – uteká najkratšou cestou von.</li>
@@ -666,6 +666,11 @@ nad ňou; legenda bez zmeny (sprity od stĺpca 4, text od 10), medzi legendou a 
 na stred sa pri zachovaných medzerách nedá).</li>
 <li>Úprava rozloženia: tabuľka o 1 znak doprava (stĺpce 25–37), nadpis „HIGH SCORES“ od stĺpca 27, sprity legendy o 2 px doľava.</li>
 <li>Overené v C64U Code: titulka, zadanie mena „AY !“, zaradenie, zápis na disk bez chyby. Koniec kódu <code>$8156</code>.</li></ul>
+
+<h3>Kostlivec nestrieľa zblízka (2026-11-17)</h3>
+<ul><li><code>monster.cs64</code>: kostlivec vystrelí len na hráča aspoň 3 bunky ďaleko (<code>SKEL_MIN_DIST</code>; vzdialenosť počíta
+<code>seesCell</code> pri prechode chodbou) – zblízka, napr. hneď po objavení, sa strele nedalo uhnúť. Strážca hĺbky hádže balvany bez
+obmedzenia. Kód +~40 B (koniec <code>$8180</code>).</li></ul>
 
 <h3>Otočenie na mieste všade (2026-11-17)</h3>
 <ul><li><code>player.cs64</code>: podmienka „čelom k stene“ odstránená – stojaci hráč sa pri joysticku do protismeru vždy najprv len
