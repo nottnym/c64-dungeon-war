@@ -760,7 +760,10 @@ zarobený – zisk a strata sa už nezakryjú a život zarobený počas výbuchu
 <li><b>Bočné brány:</b> zvonku vodorovná stena nad otvorom a pod ním (2 znaky), nový znak 87 s pásom v strede znaku – steny
 o 3 px ďalej od otvoru, aby východ nevyzeral ako uzáver. Zápis cez polia na pevnej adrese riadkov obrazovky (prvý pokus so
 16-bitovými adresami pridal ~480 B a kód prerástol do obrazovky).</li>
-<li>Test: steny brán v emulátore, ostatné overil hráč. Koniec kódu <code>$827D</code> (rezerva 387 B).</li>
+<li><b>Rámik radaru:</b> tenký modrý obrys miestnosti okolo bodiek (hires znaky 88–95; vodorovne ~5 px od bodiek – tesnejšia
+čiara by v poslednom stĺpci zdieľala farbu znaku s bodkou príšery), nápis „RADAR“ naľavo od rámika. Kreslenie radaru cez polia
+na pevnej adrese riadkov 20–24 – kód sa tým zmenšil.</li>
+<li>Test: steny brán a rámik radaru v emulátore, ostatné overil hráč. Koniec kódu <code>$81DF</code> (rezerva 545 B).</li>
 </ul>
 
 <h3>Code review opráv po hraní (nezávislý agent, 2026-11-17) – opravené</h3>

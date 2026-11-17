@@ -124,14 +124,36 @@ const T_RADAR_LBL: byte[] = screenCodes("RADAR")
 var mrx: byte[6] = [255, 255, 255, 255, 255, 255]   // bunka, v ktorej je príšera na radare (255 = nie je)
 var mry: byte[6] = [255, 255, 255, 255, 255, 255]
 
+// Rámik radaru (krok 12.1): stĺpce RAD_COL-1 … RAD_COL+6, riadky RAD_ROW-1 … RAD_ROW+3; 0 = vnútro (bodky).
+// Radar sa kreslí cez polia na pevnej adrese riadkov 20–24 obrazovky a farieb (index = riadok * 40 + stĺpec < 200)
+// – indexovaný zápis namiesto 16-bitových adries (krok 12.1: rámik inak stál ~230 B kódu).
+const C_FRAME: byte = 88
+const COL_FRAME: byte = 6                // modrá ako steny (hires znak → farba < 8)
+var radScr: byte[200] @ $8400 + 20 * 40
+var radCol: byte[200] @ $D800 + 20 * 40
+const RAD_FRAME: byte[] = [
+    90, 91, 91, 91, 91, 91, 91, 92,
+    88, 0, 0, 0, 0, 0, 0, 89,
+    88, 0, 0, 0, 0, 0, 0, 89,
+    88, 0, 0, 0, 0, 0, 0, 89,
+    93, 94, 94, 94, 94, 94, 94, 95]
+const RAD_LINE: byte[] = [40 + RAD_COL, 80 + RAD_COL, 120 + RAD_COL]   // začiatok riadku bodiek ky v radScr
+
 function initRadar(): void {
     for i = 0 to MAX_MON - 1 { mrx[i] = 255 }
-    for r = 0 to 2 {
-        var a: uint16 = SCREEN + rowAddr(RAD_ROW + r) + RAD_COL
-        for c = 0 to 5 { poke(a + c, C_RADAR)  poke(a - SCREEN + COLRAM + c, 1) }
+    var k: byte = 0
+    var p: byte = RAD_COL - 1
+    for r = 0 to 4 {
+        for c = 0 to 7 {
+            var ch: byte = RAD_FRAME[k]
+            if (ch == 0) { ch = C_RADAR }                      // vnútro: prázdny radar
+            radScr[p + c] = ch
+            radCol[p + c] = COL_FRAME
+            k = k + 1
+        }
+        p = p + 40
     }
-    var b: uint16 = SCREEN + rowAddr(RAD_ROW + 3) + RAD_COL
-    for i = 0 to 4 { poke(b + i, T_RADAR_LBL[i])  poke(b - SCREEN + COLRAM + i, 1) }   // hires text: farba < 8 (review č. 1)
+    for i = 0 to 4 { radScr[81 + RAD_COL - 8 + i] = T_RADAR_LBL[i]  radCol[81 + RAD_COL - 8 + i] = 1 }   // nápis naľavo od rámika
 }
 
 // Prekreslí znak radaru (kx, ky) podľa príšer, ktoré v ňom práve sú.
@@ -148,9 +170,9 @@ function radarChar(kx: byte, ky: byte): void {
             }
         }
     }
-    var a: uint16 = SCREEN + rowAddr(RAD_ROW + ky) + RAD_COL + kx
-    poke(a, C_RADAR + m)
-    poke(a - SCREEN + COLRAM, T_RADAR[t])
+    var q: byte = RAD_LINE[ky] + kx
+    radScr[q] = C_RADAR + m
+    radCol[q] = T_RADAR[t]
 }
 
 function updateRadar(): void {

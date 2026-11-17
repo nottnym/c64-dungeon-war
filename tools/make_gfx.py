@@ -148,6 +148,19 @@ for m in range(16):
         rows.append(("###." if l else "....") + ("###." if r else "...."))
     hires(128 + m, f'radar maska {m:04b}', rows)
 
+# --- rámik radaru (hires, krok 12.1): obrys miestnosti 11 × 6 buniek okolo bodiek – vodorovne 5 px, zvisle 2 px od nich
+def frame(code, name, rows):
+    hires(code, 'rámik radaru – ' + name, rows)
+E = "........"
+frame(88, 'vľavo', ["..#....."] * 8)
+frame(89, 'vpravo', ["#......."] * 8)
+frame(90, 'ĽH roh', [E, E, E, E, E, E, "..######", "..#....."])
+frame(91, 'hore', [E, E, E, E, E, E, "########", E])
+frame(92, 'PH roh', [E, E, E, E, E, E, "#.......", "#......."])
+frame(93, 'ĽD roh', ["..#.....", "..#.....", "..######", E, E, E, E, E])
+frame(94, 'dole', [E, E, "########", E, E, E, E, E])
+frame(95, 'PD roh', ["#.......", "#.......", "#.......", E, E, E, E, E])
+
 # --- predmety (multicolor) --------------------------------------------------------------------------
 multi(144, 'truhlica ĽH', ["....", ".111", "1222", "1222", "1333", "1222", "1222", ".111"])
 multi(145, 'truhlica PH', ["....", "111.", "2221", "2221", "3331", "2221", "2221", "111."])

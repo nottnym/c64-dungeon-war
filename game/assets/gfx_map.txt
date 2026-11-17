@@ -66,6 +66,14 @@
  85  tunel – otvor (šípky)
  86  tunel – zavalený
  87  stena východu bočnej brány
+ 88  rámik radaru – vľavo
+ 89  rámik radaru – vpravo
+ 90  rámik radaru – ĽH roh
+ 91  rámik radaru – hore
+ 92  rámik radaru – PH roh
+ 93  rámik radaru – ĽD roh
+ 94  rámik radaru – dole
+ 95  rámik radaru – PD roh
 128  radar maska 0000
 129  radar maska 0001
 130  radar maska 0010
