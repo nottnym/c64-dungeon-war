@@ -9,6 +9,7 @@ const SCORE_COL2: byte = 34             // "PLAYER 2 " od stĺpca 25 → čísli
 const MAX_LIVES: byte = 6
 
 var scoreD: byte[12] = new byte[12]     // hráč p: číslice scoreD[p*6 .. p*6+5], najvyššia prvá
+var nextLife: byte[2] = [1, 1]          // ďalší život navyše pri tomto skóre (jednotka 10 000; tuning.cs64)
 
 const T_QUEST_OVER: byte[] = screenCodes("QUEST OVER")
 const T_PRESS_FIRE: byte[] = screenCodes("PRESS FIRE")
@@ -42,11 +43,22 @@ function addScore(p: byte, pos: byte, v: byte): void {
         if (i == b) { c = 0 } else { i = i - 1 }
     }
     showScore(p)
+    // život navyše pri 10 000 a potom každých 20 000 bodov, najviac MAX_LIVES (kap. 6)
+    var v: byte = scoreD[b] * 10 + scoreD[b + 1]
+    while (v >= nextLife[p] && nextLife[p] < 250) {
+        nextLife[p] = nextLife[p] + EXTRA_EVERY
+        if (pstate[p] != PS_OUT && plives[p] < MAX_LIVES) {
+            plives[p] = plives[p] + 1
+            showLives(p, plives[p])
+            sfx(SFX_TORCH)
+        }
+    }
 }
 
 function resetScore(p: byte): void {
     var b: byte = scoreBase(p)
     for i = 0 to 5 { scoreD[b + i] = 0 }
+    nextLife[p] = EXTRA_FIRST
     showScore(p)
 }
 

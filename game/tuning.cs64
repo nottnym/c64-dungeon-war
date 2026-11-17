@@ -1,0 +1,49 @@
+// ============================================================================
+//  Dungeon War – ladenie obtiažnosti (krok 10): všetky herné konštanty na jednom mieste
+//  Čas je v snímkoch (50 = 1 s), ak nie je uvedené inak; rýchlosti v pixeloch za snímok × 256.
+//  Tabuľka s významom a pôvodnými hodnotami: docs/DungeonWar-design.html, kap. „Krok 10“.
+// ============================================================================
+
+// --- hráč ---
+const ARROW_SPEED: byte = 4              // šíp, pixely za snímok
+const TURN_HOLD: byte = 10               // otočenie na mieste: pohyb až po toľkých snímkach držania
+const GATE_SECS: byte = 5                // odpočet v bráne (sekundy)
+const INV_TIME: byte = 50                // nezraniteľnosť po výstupe z brány
+const TUN_SHUT_TIME: byte = 150          // tunel zavalený po použití
+const EXTRA_FIRST: byte = 1              // prvý život navyše pri 10 000 bodoch (jednotka 10 000)
+const EXTRA_EVERY: byte = 2              // ďalšie každých 20 000 bodov
+
+// --- príšery ---
+const T_SPEED: byte[] = [0, 128, 160, 224, 255, 96]   // –, slizák, kostlivec, tieň, zlodej, strážca
+const SPEED_PER_FLOOR: byte = 6          // zrýchlenie za každé podlažie nad prvým …
+const SPEED_FLOOR_MAX: byte = 60         // … najviac (od 12. podlažia)
+const SPEED_STEP_SECS: byte = 20         // každých toľko sekúnd na podlaží …
+const SPEED_STEP: byte = 8               // … +toľko …
+const SPEED_STEPS_MAX: byte = 5          // … najviac toľkokrát
+const SPEED_FEW: byte = 24               // keď ostanú najviac 2 príšery
+const SHOT_SPEED: byte = 3               // strela kostlivca, pixely za snímok
+const SHOT_COOL: byte = 75               // kostlivec: pauza medzi výstrelmi
+const SKEL_MIN_DIST: byte = 3            // kostlivec nestrieľa na hráča bližšie (bunky)
+const SKEL_CLOAK_FLOOR: byte = 8         // od tohto podlažia sú kostlivce občas neviditeľné
+const SKEL_SHOW_TIME: byte = 150         // kostlivec viditeľný (+ náhodne 0–63)
+const SKEL_HIDE_TIME: byte = 75          // kostlivec neviditeľný
+const SHADE_SHOW_TIME: byte = 50         // tieň: zablysnutie
+const SHADE_HIDE_TIME: byte = 150        // tieň neviditeľný (+ náhodne 0–63)
+const RESPAWN_TIME: byte = 150           // príšera zo zásoby sa objaví po toľkých snímkach
+const SAFE_DIST: byte = 2                // návrat sa odloží, kým je hráč bližšie (bunky)
+
+// --- strážca hĺbky ---
+const BOSS_HP: byte = 8
+const BOSS_BOOST: byte = 20              // zrýchlenie za zásah
+const BOSS_SHOW: byte = 100              // viditeľný po zásahu
+const BOSS_START_SHOW: byte = 150        // viditeľný na začiatku podlažia
+const BOSS_THROW_SHOW: byte = 25         // viditeľný pri hode balvana
+const BOSS_THROW_COOL: byte = 100        // pauza medzi balvanmi (+ náhodne 0–63)
+const BOULDER_SPEED: byte = 2            // balvan, pixely za snímok
+
+// --- predmety a podlažie ---
+const ITEM_LIFE: byte = 62               // truhlica/fakľa zmizne po ~10 s (jednotka 8 snímok)
+const TORCH_TICKS: byte = 50             // fakľa odhalí tiene na ~8 s (jednotka 8 snímok)
+const CHEST_CHANCE: byte = 6             // šanca na truhlicu každých 8 snímok (z 256)
+const TORCH_CHANCE: byte = 3             // šanca na fakľu každých 8 snímok (z 256)
+const BONUS_TICKS: byte = 94             // pokladnica ~15 s (jednotka 8 snímok)

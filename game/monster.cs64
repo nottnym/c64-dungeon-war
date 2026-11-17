@@ -13,7 +13,6 @@ const M_THIEF: byte = 4                 // zlodej pokladu (krok 7)
 const M_BOSS: byte = 5                  // strážca hĺbky (krok 8, boss.cs64)
 
 // vlastnosti podľa typu (index = typ)
-const T_SPEED:  byte[] = [0, 128, 160, 224, 255, 96] // pixely za snímok × 256
 const T_SPRITE: byte[] = [0, 136, 144, 152, 160, 162] // slizák 8–15, kostlivec 16–23, tieň 24–31, zlodej 32–33, golem 34–35
 const T_COLOR:  byte[] = [0, 13, 15, 4, 7, 12]       // svetlozelená, svetlosivá, fialová, žltá, sivá
 const T_POINTS: byte[] = [0, 1, 2, 5, 10, 0]         // stovky bodov, najviac 10 (addScore); strážca 2500 v hitBoss
@@ -43,8 +42,9 @@ var mspd:  byte[6] = [0, 0, 0, 0, 0, 0]
 var macc:  byte[6] = [0, 0, 0, 0, 0, 0]
 var mstep: byte[6] = [0, 0, 0, 0, 0, 0]
 var mcool: byte[6] = [0, 0, 0, 0, 0, 0]  // kostlivec: snímky do ďalšieho výstrelu
-var mcloak: byte[6] = [0, 0, 0, 0, 0, 0] // tieň: odpočet do prepnutia viditeľnosti
-var mshow: byte[6] = [0, 0, 0, 0, 0, 0]  // tieň: 1 = práve viditeľný (zablysnutie)
+var mcloak: byte[6] = [0, 0, 0, 0, 0, 0] // tieň / kostlivec od 8. podlažia: odpočet do prepnutia viditeľnosti
+var mshow: byte[6] = [0, 0, 0, 0, 0, 0]  // 1 = práve viditeľný
+var skelCloak: bool = false              // kostlivce na tomto podlaží občas neviditeľné (floorLayout)
 
 // miesta objavenia (bunky) – rohy a stred, ďaleko od brán
 const SPAWN_X: byte[] = [0, 10, 5, 2, 8, 5]
@@ -276,8 +276,9 @@ function spawnMonster(i: byte, typ: byte): void {
     mstep[i] = 0
     mspd[i] = speedOf(typ)
     mcool[i] = 75
-    mcloak[i] = 150 + (rand8() & 63)
+    mcloak[i] = SHADE_HIDE_TIME + (rand8() & 63)
     mshow[i] = 0
+    if (typ == M_SKEL) { mshow[i] = 1  mcloak[i] = SKEL_SHOW_TIME }   // kostlivec začína viditeľný
     claimCell(i, mcy[i] * MZ_W + mcx[i])
 }
 
@@ -285,8 +286,6 @@ function spawnMonster(i: byte, typ: byte): void {
 //  Strely príšer (kostlivce): 2 sloty, 3 px/snímok, steny ako šíp hráča
 // ---------------------------------------------------------------------------
 const MAX_SHOT: byte = 2
-const SHOT_SPEED: byte = 3
-const SHOT_COOL: byte = 75               // 1,5 s
 
 var son: byte[2] = [0, 0]
 var sx: byte[2] = [0, 0]
@@ -298,7 +297,6 @@ var sbig: byte[2] = [0, 0]                // 1 = balvan strážcu (pomalší, in
 // Vidí kostlivec niektorého živého hráča v rovnej chodbe? Vracia smer alebo 0.
 // Kostlivec nestrieľa na hráča bližšie ako SKEL_MIN_DIST buniek – zblízka (napr. hneď po objavení) by sa strele nedalo
 // uhnúť (úprava 2026-11-17). Strážca hĺbky hádže balvany bez tohto obmedzenia.
-const SKEL_MIN_DIST: byte = 3
 var seeMin: byte = 1                     // najmenšia vzdialenosť v bunkách, na ktorú seesCell hlási hráča
 function seesPlayer(i: byte): byte {
     seeMin = 1
@@ -405,13 +403,21 @@ var decBudget: byte = 2
 function moveMonster(i: byte): void {
     if (mcool[i] != 0) { mcool[i] = mcool[i] - 1 }
     if (mkind[i] == M_BOSS) { tickBoss() }
-    if (mkind[i] == M_SHADE) {                   // zablysnutie: 1 s viditeľný každé 3–4 s
+    var mk0: byte = mkind[i]
+    if (mk0 == M_SHADE) {                        // zablysnutie: 1 s viditeľný každé 3–4 s
         mcloak[i] = mcloak[i] - 1
         if (mcloak[i] == 0) {
             mshow[i] = mshow[i] ^ 1
-            if (mshow[i] != 0) { mcloak[i] = 50  sfx(SFX_SHADE) } else { mcloak[i] = 150 + (rand8() & 63) }
+            if (mshow[i] != 0) { mcloak[i] = SHADE_SHOW_TIME  sfx(SFX_SHADE) }
+            else { mcloak[i] = SHADE_HIDE_TIME + (rand8() & 63) }
         }
-    }
+    } else { if (mk0 == M_SKEL && skelCloak) {   // kostlivec od 8. podlažia: ~3–4 s viditeľný, 1,5 s neviditeľný
+        mcloak[i] = mcloak[i] - 1
+        if (mcloak[i] == 0) {
+            mshow[i] = mshow[i] ^ 1
+            if (mshow[i] != 0) { mcloak[i] = SKEL_SHOW_TIME + (rand8() & 63) } else { mcloak[i] = SKEL_HIDE_TIME }
+        }
+    } }
     if (moff[i] == 0 && decBudget == 0) { return }      // rozhodnutie až v ďalšom snímku
     if (moff[i] == 0 && mkind[i] == M_THIEF && mcy[i] == TUN_ROW && (mcx[i] == 0 || mcx[i] == MZ_W - 1)) {
         claimCell(i, 255)                        // zlodej utiekol tunelom
@@ -432,7 +438,7 @@ function moveMonster(i: byte): void {
             if (sd != 0 && fireShot(i, sd)) {
                 mcool[i] = SHOT_COOL
                 if (mk == M_BOSS) {              // strážca: balvan každé 2–3 s, pri hode na chvíľu viditeľný
-                    mcool[i] = 100 + (rand8() & 63)
+                    mcool[i] = BOSS_THROW_COOL + (rand8() & 63)
                     if (bossShow < BOSS_THROW_SHOW) { bossShow = BOSS_THROW_SHOW }
                 }
                 mface[i] = sd                    // otočený k hráčovi a jedno rozhodnutie stojí (review č. 2)
@@ -478,13 +484,15 @@ function monY(i: byte): byte {
 }
 
 // Tieň je vidieť len pri zablysnutí alebo bližšie ako 3 bunky od hráča; ostatné príšery vždy.
-// Strážca rovnako, ale namiesto zablysnutí je viditeľný po zásahu, pri hode a na začiatku podlažia (bossShow).
+// Kostlivec od 8. podlažia rovnako podľa svojho časovača (mshow). Strážca: namiesto zablysnutí je viditeľný po zásahu,
+// pri hode a na začiatku podlažia (bossShow).
 function monVisible(i: byte): bool {
     var k: byte = mkind[i]
-    if (k != M_SHADE && k != M_BOSS) { return true }
+    if (k == M_SKEL) { if (!skelCloak) { return true } }
+    else { if (k != M_SHADE && k != M_BOSS) { return true } }
     if (torchTicks != 0) { return true }         // fakľa odhalí tiene
-    if (k == M_SHADE) { if (mshow[i] != 0) { return true } }
-    else { if (bossShow != 0) { return true } }
+    if (k == M_BOSS) { if (bossShow != 0) { return true } }
+    else { if (mshow[i] != 0) { return true } }
     var p: byte = nearestPlayer(mcx[i], mcy[i])
     if (p == 255) { return false }
     return absDiff(mcx[i], pcx[p]) + absDiff(mcy[i], pcy[p]) < 3
@@ -517,7 +525,6 @@ function updateMonPos(): void {
 //  Smrť a návrat príšer
 // ---------------------------------------------------------------------------
 const BOOM_TIME: byte = 24
-const RESPAWN_TIME: byte = 150           // 3 s
 
 var mboom: byte[6] = [0, 0, 0, 0, 0, 0]  // > 0 = výbuch (odpočet snímok)
 var mresp: byte[6] = [0, 0, 0, 0, 0, 0]  // > 0 = čaká na návrat
@@ -539,7 +546,6 @@ function killMonster(i: byte): void {
 }
 
 const BLINK_TIME: byte = 50              // posledná 1 s pred návratom príšera bliká na mieste objavenia
-const SAFE_DIST: byte = 2                // návrat sa odloží, kým je živý hráč bližšie (bunky, Manhattan)
 
 function updateMonster(i: byte): void {
     if (mtype[i] != M_NONE) { moveMonster(i)  return }

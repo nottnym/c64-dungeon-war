@@ -76,14 +76,14 @@ function updateSpeed(): void {
     if (secFrames < 50) { return }
     secFrames = 0
     if (floorSecs < 255) { floorSecs = floorSecs + 1 }
-    var b: byte = (floorNo - 1) * 6
-    if (floorNo > 11) { b = 60 }
+    var b: byte = SPEED_FLOOR_MAX                // konštanty: tuning.cs64
+    if (floorNo <= SPEED_FLOOR_MAX / SPEED_PER_FLOOR) { b = (floorNo - 1) * SPEED_PER_FLOOR }
     var steps: byte = 0
     var t: byte = floorSecs
-    while (t >= 20 && steps < 5) { t = t - 20  steps = steps + 1 }
-    b = b + steps * 8
+    while (t >= SPEED_STEP_SECS && steps < SPEED_STEPS_MAX) { t = t - SPEED_STEP_SECS  steps = steps + 1 }
+    b = b + steps * SPEED_STEP
     var nb: byte = b
-    if (aliveMonsters() <= 2) { b = b + 24 }
+    if (aliveMonsters() <= 2) { b = b + SPEED_FEW }
     if (b != speedBonus || nb != baseBonus) {
         baseBonus = nb
         speedBonus = b
@@ -102,8 +102,6 @@ const IT_NONE: byte = 0
 const IT_CHEST: byte = 1
 const IT_TORCH: byte = 2
 const MAX_ITEM: byte = 6
-const ITEM_LIFE: byte = 62               // ~10 s (jednotka 8 snímok)
-const TORCH_TICKS: byte = 50             // ~8 s
 const C_CHEST: byte = 144                // + 145 (pravá polovica)
 const C_TORCH: byte = 146
 const COL_ITEM: byte = 15                // multicolor + žltá
@@ -201,8 +199,8 @@ function updateItems(): void {
             if (itTime[k] == 0) { removeItem(k) }
         }
     }
-    if (itType[0] == IT_NONE && rand8() < 6) { placeItem(0, IT_CHEST, ITEM_LIFE) }
-    if (itType[1] == IT_NONE && rand8() < 3) { placeItem(1, IT_TORCH, ITEM_LIFE) }
+    if (itType[0] == IT_NONE && rand8() < CHEST_CHANCE) { placeItem(0, IT_CHEST, ITEM_LIFE) }
+    if (itType[1] == IT_NONE && rand8() < TORCH_CHANCE) { placeItem(1, IT_TORCH, ITEM_LIFE) }
 }
 
 // --- temné podlažie: steny vidieť len okolo hráčov (3 × 3 bunky) a pri fakli ---
@@ -266,7 +264,6 @@ function updateDark(): void {
 }
 
 // --- pokladnica ---
-const BONUS_TICKS: byte = 94             // ~15 s (jednotka 8 snímok)
 var bonusTicks: byte = 0
 var bonusFrames: byte = 0
 
@@ -337,6 +334,7 @@ function floorLayout(): void {
     loadLevel(n, (block & 1) != 0)
     isDark = false
     isBoss = false
+    skelCloak = !isBonus && floorNo >= SKEL_CLOAK_FLOOR   // kostlivce občas neviditeľné (kap. 5)
     if (isBonus) { return }
     var t: byte = floorNo
     while (t >= 5) { t = t - 5 }

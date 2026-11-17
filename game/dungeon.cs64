@@ -23,6 +23,7 @@ uses Vic = "std:vic"
 uses Joy = "std:joy"
 uses Mux2 = "std:mux2"
 uses "layout.cs64"
+uses "tuning.cs64"
 uses "maze.cs64"
 uses "player.cs64"
 uses "monster.cs64"
@@ -112,6 +113,7 @@ const DEBUG_LEVEL: uint16 = $02FF
 var distKey: byte[5] = [255, 255, 255, 255, 255]   // bunky a stavy hráčov, pre ktoré platí mapa vzdialeností
 // MERANIE (dočasné): max. dĺžka logiky snímku v rastroch / 2 – $02FD bez BFS, $02FE so BFS
 const DBG_T: uint16 = $02FD
+const DBG_LATE: uint16 = $02FC           // MERANIE: počet snímkov hry, keď multiplexer zopakoval snímok (Mux2.wasLate)
 // MERANIE (dočasné): zápis 1 na $02F4 → v najbližšom hernom snímku sa uložia rastre (/2) po fázach do $02F5–$02FB
 const DBG_REQ: uint16 = $02F4
 var dbgOn: byte = 0
@@ -355,6 +357,8 @@ function main(): void {
     initVideo()
     clearScreen()
     initSprites()
+    poke($DC00, $FF)                       // KERNAL IRQ nechal $7F – klávesy by čítal joystick 1 (review k9 č. 5); len raz,
+                                           // nie každý snímok: virtuálny joystick C64U zapisuje stav práve do $DC00
     showTitle()
     var firePrev0: bool = true
     var firePrev1: bool = true
@@ -362,9 +366,11 @@ function main(): void {
     poke(DEBUG_LEVEL, 0)
     poke(DBG_T, 0)                         // meranie od nuly (review č. 7)
     poke(DBG_T + 1, 0)
+    poke(DBG_LATE, 0)
     while (true) {
         Mux2.waitFrame()                   // 1. začiatok snímku
-        poke($DC00, $FF)                   // žiadny riadok klávesnice – klávesy nečíta joystick 1 (review k9 č. 5)
+        var wasPlay: bool = state == ST_PLAY && !paused   // meranie len v snímkoch hry (krok 10)
+        if (wasPlay && Mux2.wasLate()) { var lc: byte = peek(DBG_LATE)  if (lc != 255) { poke(DBG_LATE, lc + 1) } }
         var joy: byte = Joy.read2()        // 2. logika – hráč 1 port 2
         var joy1: byte = Joy.read1()       //            hráč 2 port 1
         var f0: bool = Joy.fire(joy)
@@ -456,12 +462,14 @@ function main(): void {
         Mux2.update()                      // 3. commit – posledný zápis snímku
         mark(6)
         dbgOn = 0
-        var rl: uint16 = peek($D012) | ((uint16)(peek($D011) & $80) << 1)
-        var lines: uint16 = rl + 62               // od frame-start rastra 250: (rl - 250) mod 312
-        if (rl >= 250) { lines = rl - 250 }
-        var half: byte = (byte)(lines >> 1)
-        var slot: uint16 = DBG_T
-        if (decBudget == 1) { slot = DBG_T + 1 }     // snímok s BFS (alebo s jedným rozhodnutím)
-        if (half > peek(slot)) { poke(slot, half) }
+        if (wasPlay && state == ST_PLAY) {        // nie titulka/úvod/koniec ani snímok so začiatkom podlažia (krok 10)
+            var rl: uint16 = peek($D012) | ((uint16)(peek($D011) & $80) << 1)
+            var lines: uint16 = rl + 62               // od frame-start rastra 250: (rl - 250) mod 312
+            if (rl >= 250) { lines = rl - 250 }
+            var half: byte = (byte)(lines >> 1)
+            var slot: uint16 = DBG_T
+            if (decBudget == 1) { slot = DBG_T + 1 }     // snímok s BFS (alebo s jedným rozhodnutím)
+            if (half > peek(slot)) { poke(slot, half) }
+        }
     }
 }

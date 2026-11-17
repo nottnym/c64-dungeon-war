@@ -321,7 +321,7 @@ zapisovať do zoznamu námetov pre kompilátor.</div>
 <tr><td>7</td><td>Zlodej, truhlice, fakle, zrýchľovanie, priebeh podlaží</td><td>12 podlaží</td></tr>
 <tr><td>8</td><td>Strážca hĺbky (boss)</td><td>podlažie 5</td></tr>
 <tr><td>9</td><td>Zvukové efekty, hudba, titulka, koniec hry, najvyššie skóre</td><td>kompletná hra</td></tr>
-<tr><td>10</td><td>Ladenie obtiažnosti, test na C64 Ultimate, správa o C#64</td><td>zoznam námetov pre kompilátor</td></tr>
+<tr><td>10</td><td>Ladenie obtiažnosti, test na C64 Ultimate, správa o C#64</td><td>zoznam námetov pre kompilátor (<code>CSharp64-report.html</code>)</td></tr>
 </table>
 <p>Po každom kroku: build, kontrola konca kódu, test vo vstavanom emulátore C64U Code, zápis do tohto dokumentu
 (kap. „Priebeh“ pribudne s prvým krokom).</p>
@@ -676,6 +676,45 @@ obmedzenia. Kód +~40 B (koniec <code>$8180</code>).</li></ul>
 <ul><li><code>player.cs64</code>: podmienka „čelom k stene“ odstránená – stojaci hráč sa pri joysticku do protismeru vždy najprv len
 otočí, pohne sa pri ďalšom stlačení alebo po 10 snímkach držania (hra bola inak priťažká). Overené v C64U Code: na (0,5) otočenie
 dole → hore bez posunu, ďalšie stlačenie → posun na (0,4); tam krátko dole → len otočenie, hoci dole bolo voľno.</li></ul>
+
+<h3>Krok 10 – ladenie, test na C64 Ultimate, správa o C#64 (2026-11-17)</h3>
+<ul>
+<li><b>Doplnené z dizajnu:</b> život navyše pri 10 000 a potom každých 20 000 bodov, najviac 6 (<code>hud.cs64</code>,
+<code>nextLife</code>; zvuk ako fakľa). Od 8. podlažia sú kostlivce občas neviditeľné: ~3–4 s viditeľné, 1,5 s neviditeľné,
+zblízka a pri fakli viditeľné, na radare vždy (<code>skelCloak</code>). Overené v C64U Code: +10 000 → 4 srdcia; na 8. podlaží
+kostlivce miznú a objavujú sa.</li>
+<li><b>Ladiace konštanty</b> sú teraz v <code>game/tuning.cs64</code> (tabuľka nižšie). Čísla zo zrýchľovania, šancí predmetov,
+cooldownu balvana a časovačov tieňa nahradili pomenované konštanty, správanie sa nezmenilo.</li>
+<li><b>Test na C64 Ultimate</b> (firmvér 1.1.0, PAL, odoslanie z editora, obraz cez okno prenosu): titulka so spritmi, štart, znelka a
+úvod podlažia, hra, temné podlažie, pauza RUN/STOP z klávesnice zariadenia. Virtuálny joystick C64U zapisuje do <code>$DC00</code>,
+preto hra už <code>$DC00 = $FF</code> nenastavuje každý snímok: len raz po štarte multiplexera a po uložení. Sken RUN/STOP hodnotu vracia.
+Port 1 virtuálneho joysticku (DDR B na výstup) vyzerá pre sken ako RUN/STOP. S fyzickým joystickom sa to nestane.</li>
+<li><b>Meranie</b> len v snímkoch hry (nie titulka, úvod, koniec ani snímok so začiatkom podlažia), nová bunka <code>$02FC</code> = počet
+oneskorených snímkov (<code>Mux2.wasLate</code>). Na C64U pri 2 hráčoch: 3. podlažie 66 oneskorených za ~70 s, temné 4. podlažie 62 za
+~60 s (~2 %). Snímky s BFS do ~200 riadkov. Podrobnosti v <code>docs/CSharp64-report.html</code>, kap. 6.</li>
+<li><b>Kontrola veľkosti v <code>build.sh</code>:</b> zostavenie zlyhá, ak kód s konštantami siaha nad <code>$8400 − 64</code>. Koniec kódu
+<code>$833B</code>, rezerva ~200 B.</li>
+<li><b>Správa o C#64:</b> <code>docs/CSharp64-report.html</code> (námety pre kompilátor, knižnice a nástroje, veľkosť kódu, meranie).</li>
+</ul>
+<table>
+<tr><th>Konštanta (<code>tuning.cs64</code>)</th><th>Hodnota</th><th>Význam</th></tr>
+<tr><td><code>T_SPEED</code></td><td>128 / 160 / 224 / 255 / 96</td><td>rýchlosť slizák / kostlivec / tieň / zlodej / strážca (px × 256 za snímok)</td></tr>
+<tr><td><code>SPEED_PER_FLOOR</code>, <code>SPEED_FLOOR_MAX</code></td><td>6, 60</td><td>zrýchlenie za podlažie, strop</td></tr>
+<tr><td><code>SPEED_STEP_SECS</code>, <code>SPEED_STEP</code>, <code>SPEED_STEPS_MAX</code></td><td>20, 8, 5</td><td>zrýchľovanie počas podlažia</td></tr>
+<tr><td><code>SPEED_FEW</code></td><td>24</td><td>keď ostanú najviac 2 príšery (nie strážca)</td></tr>
+<tr><td><code>SHOT_SPEED</code>, <code>SHOT_COOL</code>, <code>SKEL_MIN_DIST</code></td><td>3, 75, 3</td><td>strela kostlivca, pauza, najmenšia vzdialenosť</td></tr>
+<tr><td><code>SKEL_CLOAK_FLOOR</code>, <code>SKEL_SHOW_TIME</code>, <code>SKEL_HIDE_TIME</code></td><td>8, 150 (+0–63), 75</td><td>neviditeľné kostlivce</td></tr>
+<tr><td><code>SHADE_SHOW_TIME</code>, <code>SHADE_HIDE_TIME</code></td><td>50, 150 (+0–63)</td><td>zablysnutie tieňa</td></tr>
+<tr><td><code>RESPAWN_TIME</code>, <code>SAFE_DIST</code></td><td>150, 2</td><td>návrat zo zásoby</td></tr>
+<tr><td><code>BOSS_HP</code>, <code>BOSS_BOOST</code></td><td>8, 20</td><td>zásahy strážcu, zrýchlenie za zásah</td></tr>
+<tr><td><code>BOSS_SHOW</code>, <code>BOSS_START_SHOW</code>, <code>BOSS_THROW_SHOW</code></td><td>100, 150, 25</td><td>viditeľnosť strážcu</td></tr>
+<tr><td><code>BOSS_THROW_COOL</code>, <code>BOULDER_SPEED</code></td><td>100 (+0–63), 2</td><td>balvany</td></tr>
+<tr><td><code>ARROW_SPEED</code>, <code>TURN_HOLD</code></td><td>4, 10</td><td>šíp, otočenie na mieste</td></tr>
+<tr><td><code>GATE_SECS</code>, <code>INV_TIME</code>, <code>TUN_SHUT_TIME</code></td><td>5, 50, 150</td><td>brána, nezraniteľnosť, zavalený tunel</td></tr>
+<tr><td><code>EXTRA_FIRST</code>, <code>EXTRA_EVERY</code></td><td>1, 2</td><td>životy navyše (× 10 000 bodov)</td></tr>
+<tr><td><code>ITEM_LIFE</code>, <code>TORCH_TICKS</code>, <code>CHEST_CHANCE</code>, <code>TORCH_CHANCE</code></td><td>62, 50, 6, 3</td><td>predmety (jednotka 8 snímok; šanca z 256)</td></tr>
+<tr><td><code>BONUS_TICKS</code></td><td>94</td><td>pokladnica ~15 s</td></tr>
+</table>
 
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
 <ul><li><code>player.cs64</code>: stojaci hráč čelom k stene + joystick do protismeru → len otočenie (<code>pturn</code>,

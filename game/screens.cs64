@@ -301,9 +301,10 @@ function updateEntry(joy: byte, press: bool): bool {
 
 // --- klávesnica: RUN/STOP (riadok 7, stĺpec 7) – $DC00 sa vráti na $FF, aby klávesy nečítal joystick 1 ---
 function runStopDown(): bool {
-    poke($DC00, $7F)
+    var old: byte = peek($DC00)              // volá sa len pri pustenom joysticku 2 → je to obsah registra (aj stav
+    poke($DC00, $7F)                         // virtuálneho joysticku C64U, ktorý do $DC00 zapisuje cez sieť)
     var k: byte = peek($DC01)
-    poke($DC00, $FF)
+    poke($DC00, old)
     return (k & $80) == 0
 }
 

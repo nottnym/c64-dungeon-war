@@ -5,11 +5,6 @@
 //  hádže balvany (strela 2× pomalšia ako šíp), vydrží 8 zásahov, po každom zrýchli.
 // ============================================================================
 
-const BOSS_HP: byte = 8
-const BOSS_BOOST: byte = 20              // zrýchlenie za zásah (pixely za snímok × 256)
-const BOSS_SHOW: byte = 100              // 2 s viditeľný po zásahu
-const BOSS_START_SHOW: byte = 150        // 3 s viditeľný na začiatku podlažia
-const BOSS_THROW_SHOW: byte = 25         // 0,5 s viditeľný pri hode balvana
 const BOSS_FLASH: byte = 12              // biele zablysnutie po zásahu
 const BOSS_X: byte = 5                   // miesto objavenia: horný stred bludiska
 const BOSS_Y: byte = 0
@@ -20,7 +15,6 @@ const HIT_BOSS_AX: byte = 12
 const HIT_BOSS_AY: byte = 10
 const SPR_BOULDER: byte = 166            // balvan = sprite 38
 const COL_BOULDER: byte = 12
-const BOULDER_SPEED: byte = 2
 const BOSS_ROW: byte = 1                 // ukazovateľ zásahov v stavovom riadku
 const BOSS_COL: byte = 15
 const T_GUARD: byte[] = screenCodes("GUARD")

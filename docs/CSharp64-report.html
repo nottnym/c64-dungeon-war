@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Správa o C#64 – Dungeon War</title>
+<style>
+:root { --bg:#fff; --fg:#1d1d1f; --muted:#666; --line:#ddd; --head:#f3f4f6; --ok:#e8f5e9; --warn:#fff8e1; --bad:#fdecea; --code:#f5f5f7; }
+@media (prefers-color-scheme: dark) { :root { --bg:#1b1b1d; --fg:#e8e8ea; --muted:#9a9aa0; --line:#3a3a3e; --head:#26262a; --ok:#1e3323; --warn:#3a3420; --bad:#3d2422; --code:#26262a; } }
+body { background:var(--bg); color:var(--fg); font:15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; max-width:1000px; margin:0 auto; padding:24px 16px 64px; }
+h1 { font-size:26px; margin:0 0 4px; } h2 { font-size:20px; margin:32px 0 8px; border-bottom:1px solid var(--line); padding-bottom:4px; }
+h3 { font-size:16px; margin:20px 0 6px; }
+p.sub { color:var(--muted); margin:0 0 20px; }
+table { border-collapse:collapse; width:100%; margin:8px 0 16px; font-size:14px; }
+th, td { border:1px solid var(--line); padding:6px 8px; vertical-align:top; text-align:left; }
+th { background:var(--head); }
+code { background:var(--code); padding:1px 4px; border-radius:3px; font-size:13px; }
+.ok { background:var(--ok); } .warn { background:var(--warn); } .bad { background:var(--bad); }
+.wrap { overflow-x:auto; }
+</style>
+</head>
+<body>
+<h1>Správa o C#64</h1>
+<p class="sub">Čo ukázal vývoj hry Dungeon War (kroky 0–10, 16.–17. 11. 2026) o kompilátore C#64, knižniciach a nástrojoch C64U Code.
+Podrobnosti po krokoch sú v <code>DungeonWar-design.html</code>, kap. 19.</p>
+
+<h2>1. Zhrnutie</h2>
+<ul>
+<li><b>Hra je hotová v čistom C#64</b> bez ručného assembleru v hernej logike. Výnimkou je 25-riadková rutina na čítanie kanála 15
+mechaniky, lebo <code>open()</code> nevie nastaviť sekundárnu adresu 15. Kompilátor zvládol 2 hráčov, 6 príšer s AI a BFS,
+12 logických spritov cez <code>std:mux2</code>, hudbu GT2 v IRQ aj ukladanie na disk.</li>
+<li><b>Výkon:</b> na C64 Ultimate stíha logika 50 Hz pri jednom hráčovi. Pri dvoch hráčoch a šiestich príšerách zmešká
+multiplexer ~2 % snímkov (66 za minútu). Prejaví sa to ako krátke zopakovanie snímku, hra sa nerozpadne.</li>
+<li><b>Veľkosť kódu</b> je najväčšie obmedzenie: program s konštantami zaberá <code>$0801–$833B</code> (~31 KB). Pod obrazovkou na
+<code>$8400</code> ostáva ~200 B. Asi polovicu tvorí réžia, ktorej by sa lepší kompilátor vedel vyhnúť (pozri kap. 3).</li>
+<li><b>Najdrahšie chyby</b> nespôsobil kompilátor, ale prostredie: ROM BASIC-u nad <code>$A000</code> a PETSCII v mene súboru. Plochá RAM
+ladidla a rozdiely medzi emulátormi ich zakryli.</li>
+</ul>
+
+<h2>2. Veľkosť kódu po krokoch</h2>
+<div class="wrap"><table>
+<tr><th>Krok</th><th>Obsah</th><th>Koniec kódu</th></tr>
+<tr><td>7</td><td>priebeh podlaží, zlodej, predmety, temné podlažie</td><td><code>$654C</code></td></tr>
+<tr><td>8</td><td>strážca hĺbky</td><td><code>$6AFB</code> (s konštantami)</td></tr>
+<tr><td>9</td><td>zvuk, hudba GT2, titulka, skóre na disku</td><td><code>$7FF5</code> → po review <code>$8156</code></td></tr>
+<tr><td>10</td><td>životy navyše, neviditeľné kostlivce, ladiace konštanty, meranie</td><td><code>$833B</code></td></tr>
+</table></div>
+<p>Krok 9 pridal ~5,3 KB. Z toho ~2,2 KB tvorili funkcie, ktoré kompilátor sám vložil do <code>main</code>. Ďalší 1 KB spôsobilo osem
+rozbalení inline <code>putSprite</code> na titulke, ktoré nahradila jedna obaľovacia funkcia.</p>
+
+<h2>3. Námety pre kompilátor</h2>
+<div class="wrap"><table>
+<tr><th>#</th><th>Zistenie</th><th>Dopad v hre</th><th>Návrh</th></tr>
+<tr class="ok"><td>K1</td><td>Porovnania bajtov v podmienkach (<code>a &amp;&amp; (b &amp; 2) == 0</code>) sa prekladali 16-bitovo cez <code>acc</code>.</td>
+<td>AI a kolízie stáli stovky bajtov aj rastrov.</td><td><b>Vyriešené</b> počas vývoja: bool porovnaní a <code>&amp;&amp;</code>/<code>||</code> sa prekladajú skokmi.</td></tr>
+<tr><td>K2</td><td>Volanie funkcie s parametrami je drahé: argumenty sa kopírujú do slotov a návratová hodnota ide 16-bitovo cez <code>acc</code>.</td>
+<td>Malé pomocné funkcie v horúcich slučkách treba robiť <code>inline</code>, čo však zväčšuje kód (napr. <code>absDiff</code> 2× = +140 B).</td>
+<td>Návrat bajtu v A, parametre v registroch alebo ZP pri listových funkciách.</td></tr>
+<tr><td>K3</td><td>Automatické vloženie funkcií volaných raz do volajúceho zväčšuje <code>main</code> (krok 9: +2,2 KB). Inline funkcia volaná N-krát sa N-krát rozbalí.</td>
+<td>Rozbalenie sa nedá vypnúť pre jednu funkciu, rozhoduje sa ručnými obalmi.</td><td>Atribút „noinline“, prah veľkosti pre automatické vkladanie, varovanie pri inline s viacerými volaniami.</td></tr>
+<tr><td>K4</td><td><code>x % 24</code>, <code>x / 24</code> pre <code>byte</code> volajú 16-bitové <code>rt_DivMod16</code>.</td>
+<td>V hre nahradené tabuľkami (<code>CELL_OF</code>).</td><td>Bajtové delenie, pri konštantnom deliteli násobenie alebo tabuľka.</td></tr>
+<tr><td>K5</td><td>Lokálne premenné a parametre funkcií, ktoré DFE vyhodí, zaberajú RAM ďalej.</td><td>Malý.</td><td>Prideľovať sloty až po DFE.</td></tr>
+<tr><td>K6</td><td>Dočasné bunky na <code>$0340–$0348</code> (páskový buffer).</td><td>V hre bez problému. Pri programe, ktorý používa pásku, by to bola tichá chyba.</td>
+<td>Uviesť v dokumentácii, prípadne nastaviteľná oblasť cez <code>memoryLayout</code>.</td></tr>
+<tr class="warn"><td>K7</td><td>Kompilátor nekontroluje, či kód nepretečie do pamäte, ktorú program používa inak (obrazovka <code>$8400</code>).</td>
+<td>Pri kroku 9 kód s konštantami siahol za <code>$8400</code>. Prejavilo sa to až na obrazovke.</td>
+<td><code>memoryLayout { codeTop = $8400 }</code> s chybou pri prekročení. V hre to zatiaľ rieši kontrola v <code>build.sh</code>.</td></tr>
+<tr class="warn"><td>K8</td><td>Reťazcové literály sa prekladajú ako PETSCII (<code>.pet</code>), veľké písmená sú shiftnuté (<code>$C1–$DA</code>). Mená v
+<code>loadFile</code> a v adresári D64 sú však nešiftnuté.</td>
+<td>Uloženie skóre do „DW SCORES“ zapisovalo pod iným menom a <code>,W</code> runtime nerozpoznal (review kroku 9).</td>
+<td>Kódovať mená pre I/O rovnako ako <code>loadFile</code>, alebo varovať pri veľkých písmenách v mene súboru.</td></tr>
+<tr><td>K9</td><td>Polia na pevnej adrese: prekrytie je zrozumiteľná chyba. Varovanie pri poli v I/O (<code>sidReg @ $D400</code>) je zámerné, no nedá sa potlačiť.</td>
+<td>Šum vo výstupe každého buildu.</td><td>Potlačenie varovania pre jedno pole (napr. <code>@io</code>).</td></tr>
+<tr><td>K10</td><td>V <code>asm { }</code> nie sú viditeľné premenné C#64 pod menom.</td><td>Výmena dát s asm cez pole na pevnej adrese (<code>$02A7</code>).</td>
+<td>Prístup k symbolom (napr. <code>{meno}</code>) alebo dokumentovaný mangling.</td></tr>
+<tr><td>K11</td><td><code>step</code> je kľúčové slovo, <code>rnd</code> vyhradené meno.</td><td>Hlášky sú zrozumiteľné.</td><td>Poznámka.</td></tr>
+</table></div>
+
+<h2>4. Námety pre knižnice</h2>
+<div class="wrap"><table>
+<tr><th>#</th><th>Zistenie</th><th>Návrh / stav</th></tr>
+<tr class="ok"><td>L1</td><td><code>std:mux2</code> mal ukazovatele spritov napevno na <code>$07F8</code>.</td><td><b>Opravené:</b> <code>Mux2.setScreen(addr)</code>.</td></tr>
+<tr class="bad"><td>L2</td><td><code>Mux2.setMusicPlay</code> prepisuje operand <code>JSR</code> v IRQ po bajtoch. IRQ medzi zápismi skočí na polovičnú adresu.</td>
+<td>Zápis pod <code>sei</code>/<code>cli</code> priamo v knižnici, alebo upozornenie v dokumentácii. V hre to rieši obalenie <code>sei()</code>/<code>cli()</code>.</td></tr>
+<tr><td>L3</td><td><code>Mux2.setSprite</code> pre 10 spritov každý snímok ≈ 100 rastrov.</td><td>V hre vyrovnávacia pamäť (<code>putSprite</code> volá len pri zmene). Knižnici by pomohlo „nastav všetko, prepočítaj zmenené“.</td></tr>
+<tr><td>L4</td><td><code>open()</code> nevie sekundárnu adresu 15 (kanál príkazov a chýb mechaniky). <code>ioResult()</code> nevidí chyby DOS-u.</td>
+<td><code>diskCommand("S0:…")</code> a <code>diskStatus()</code> v štandardnej knižnici. V hre to rieši vlastná asm rutina.</td></tr>
+<tr><td>L5</td><td><code>saveFile</code> nemá „prepíš súbor“. Prepis cez <code>@0:</code> má na 1541 známu chybu, ktorá môže poškodiť disk.</td><td>Voľba replace (scratch + zápis).</td></tr>
+<tr><td>L6</td><td><code>cs64build</code> bez <code>memoryLayout</code> hlási kolíziu tabuliek mux2 so string-heapom, hoci aplikácia má iné predvolenie.</td><td>Zjednotiť predvolenia.</td></tr>
+</table></div>
+
+<h2>5. Prostredie a nástroje C64U Code</h2>
+<div class="wrap"><table>
+<tr><th>#</th><th>Zistenie</th><th>Návrh</th></tr>
+<tr class="bad"><td>P1</td><td>Kód alebo dáta na <code>$A000–$BFFF</code> (hudba cez <code>includeAt</code>) CPU pri <code>$01 = $37</code> nevidí, číta ROM BASIC-u.
+Ladidlo aj <code>Emu6502</code> majú plochú RAM, chyba sa prejavila až vo VICE (pád na BRK, zamrznutie).</td>
+<td>Varovanie pri <code>includeAt</code>/<code>sys</code> do <code>$A000–$BFFF</code> a <code>$E000+</code>, voliteľne automatické <code>$01 = $36</code>. Ladidlo by
+malo modelovať ROM.</td></tr>
+<tr><td>P2</td><td>Ladidlo nenahrá dátové súbory z <code>diskFile</code> a nespúšťa IRQ.</td><td>Podpora <code>diskFile</code> v ladidle a voliteľné IRQ.</td></tr>
+<tr><td>P3</td><td>Vstavaný emulátor nemá UI na zápis do pamäte. Ladiaci háčik hry (<code>$02FF</code> = skok na podlažie) sa nedal použiť.</td>
+<td>Monitor alebo „poke“ v Analyzátore pamäte. Analyzátor dnes pamäť len číta, a to aj z C64U, čo bolo pri meraní na zariadení veľmi užitočné.</td></tr>
+<tr class="warn"><td>P4</td><td>Virtuálny joystick C64U zapisuje stav cez sieť do <code>$DC00</code> / <code>$DC01</code>. Hra, ktorá <code>$DC00</code> každý snímok
+nastavuje (ochrana pred presakovaním klávesnice), vstup prepíše. Pri porte 1 prepnutie DDR B na výstup vyzerá pre sken klávesnice
+ako stlačený RUN/STOP. Krátky ťuk sa cez sieť často nestihne prečítať.</td>
+<td>Dokumentovať v <code>virtual-joystick.html</code>. Minimálna dĺžka stlačenia, port 1 bez DDR B, ak sa dá.</td></tr>
+<tr><td>P5</td><td>Virtuálny joystick vstavaného emulátora drží smer nespoľahlivo pri ovládaní z automatizácie. Klávesnica emulátora mapuje
+podľa polohy kláves, takže úvodzovky a niektoré písmená sa nedajú napísať.</td><td>Text cez kláves buffer, režim podľa znakov.</td></tr>
+<tr><td>P6</td><td>Adresy z <code>.vars</code> lokálneho <code>cs64build</code> nesedeli s pamäťou buildu z aplikácie (rovnaký zdroj, iná verzia prekladača).</td>
+<td>Stiahnutie <code>.vars</code>/<code>.labels</code> buildu z aplikácie.</td></tr>
+</table></div>
+
+<h2>6. Meranie na C64 Ultimate (17. 11. 2026)</h2>
+<div class="wrap"><table>
+<tr><th>Situácia</th><th>Oneskorené snímky</th><th>Najdlhší snímok bez BFS</th><th>S BFS</th></tr>
+<tr><td>Podlažie 3, 2 hráči, 6 príšer, ~70 s</td><td>66 (~2 %)</td><td>~310 riadkov*</td><td>~200 riadkov</td></tr>
+<tr><td>Podlažie 4 (temné), 2 hráči, ~60 s</td><td>62 (~2 %)</td><td>~310 riadkov*</td><td>~168 riadkov</td></tr>
+</table></div>
+<p>* Meranie (<code>$02FD</code>/<code>$02FE</code>) počíta čas modulo snímok. Snímok, ktorý pretečie, sa do maxima nedostane, preto je
+spoľahlivým ukazovateľom počet oneskorených snímkov (<code>Mux2.wasLate</code>, bunka <code>$02FC</code>). Temné podlažie neprináša navyše
+viditeľnú záťaž. Prekročenia vznikajú pri súbehu rozhodnutí AI dvoch hráčov a príšer. Ďalší krok optimalizácie by bol striedať
+logiku príšer po snímkoch, no bráni tomu rezerva pamäte (~200 B).</p>
+<p>Na zariadení sa overilo aj toto: titulka a legenda so spritmi, hudba sa spustí (zvuk posúdi používateľ), znelka a úvod podlažia,
+temné podlažie s odhaľovaním stien, pauza RUN/STOP z klávesnice zariadenia.</p>
+</body>
+</html>
