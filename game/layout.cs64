@@ -19,7 +19,7 @@ const N_LEVELS: byte = 12
 // --- "DW SCORES" → $9400: najvyššie skóre (screens.cs64), prepisuje sa saveFile s hlavičkou $9400 ---
 const A_SCORES: uint16 = $9400
 diskFile "DW SCORES" at $9400 {
-    const A_SCORES_DATA = place("assets/scores")    // tools/make_scores.py: 5 × (6 číslic + 3 znaky mena)
+    const A_SCORES_DATA = place("assets/scores")    // tools/make_scores.py: 5 × (6 číslic + 4 znaky mena)
 }
 
 // --- hudba GT2 (tools/make_music → assets/music.bin; v C64U Code položka SIDTRACK s bázou $B000) ---

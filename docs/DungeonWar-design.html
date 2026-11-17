@@ -609,7 +609,7 @@ rastie so <code>speedBonus</code> (12 → najmenej 5 snímok na notu). Registre 
 <li><b>Titulka</b> (<code>screens.cs64</code>): názov, legenda príšer so spritmi (golem z 2 polovíc) a bodmi, tabuľka 5 najvyšších
 skóre, „PRESS FIRE TO START“, nápoveda k hráčovi 2 a pauze. Stavy v <code>main</code>: titulka → úvod podlažia → hra → koniec
 (4 s „QUEST OVER“ s hudbou) → zadanie mena (ak sa hráč dostal do tabuľky; hráč 2 len ak sa pripojil) → titulka.</li>
-<li><b>Najvyššie skóre</b>: 5 × (6 číslic + 3 znaky) na <code>$9400</code>, súbor „DW SCORES“ (<code>tools/make_scores.py</code>,
+<li><b>Najvyššie skóre</b>: 5 × (6 číslic + 4 znaky mena, úprava 2026-11-17) na <code>$9400</code>, súbor „DW SCORES“ (<code>tools/make_scores.py</code>,
 predvolene 5000–1000 „DW“). Nahrá sa pri štarte (<code>loadFile</code>), po novom zázname sa zapíše
 zmazanie <code>S0:dw scores</code> cez kanál 15 a <code>saveFile(hsFile, "dw scores,p,w", bootDev)</code> (po review kroku 9) – <code>hsFile</code> je pole na pevnej adrese <code>$93FE</code> s hlavičkou PRG.
 Meno malými písmenami (review k9). Na zápis sa multiplexer zastaví, vráti sa KERNAL IRQ (<code>$EA31</code>, CIA), po zápise sa reťaz spustí znova. Zadanie mena
@@ -656,6 +656,14 @@ overí, že skladba hrá (tóny s GATE: titulka 30, znelka 19, koniec 16).</td><
 falošná hrana); namiesto <code>@0:</code> (známa chyba 1541) sa súbor najprv zmaže príkazom <code>S0:dw scores</code> cez kanál 15.
 Ponechané: neatomický zápis NMI vektora (okno pár cyklov), <code>$DC00</code> po zápise prepisuje aj hlavná slučka. Koniec kódu
 <code>$8126</code> (rezerva ~730 B).</p>
+
+<h3>Meno v tabuľke na 4 písmená (2026-11-17)</h3>
+<ul><li>Záznam 10 B (6 číslic + 4 znaky), súbor „DW SCORES“ 52 B (<code>hsFile</code> <code>$93FE–$9431</code>), predvolené mená „DW&nbsp;&nbsp;“.
+Zadanie mena: 4 písmená v strede (stĺpce 18–21).</li>
+<li>Titulka: riadok tabuľky „1 ABCD 012300“ (medzery medzi poradím, menom a skóre zachované), tabuľka v stĺpcoch 24–36, nadpis
+nad ňou; legenda bez zmeny (sprity od stĺpca 4, text od 10), medzi legendou a tabuľkou 1 stĺpec – blok 4–36 (33 znakov, presnejšie
+na stred sa pri zachovaných medzerách nedá).</li>
+<li>Overené v C64U Code: titulka, zadanie mena „AY !“, zaradenie, zápis na disk bez chyby. Koniec kódu <code>$8156</code>.</li></ul>
 
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
 <ul><li><code>player.cs64</code>: stojaci hráč čelom k stene + joystick do protismeru → len otočenie (<code>pturn</code>,

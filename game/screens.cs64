@@ -1,12 +1,13 @@
 // ============================================================================
 //  Dungeon War – obrazovky (krok 9): titulka, najvyššie skóre (disk "DW SCORES"), zadanie mena, pauza
-//  Tabuľka: 5 záznamov po 9 B (6 číslic 0–9 od najvyššej, 3 znaky mena v kódoch obrazovky) na $9400 – súbor
+//  Tabuľka: 5 záznamov po 10 B (6 číslic 0–9 od najvyššej, 4 znaky mena v kódoch obrazovky) na $9400 – súbor
 //  "DW SCORES" (layout.cs64) sa nahrá pri štarte a po novom zázname sa prepíše (saveFile s hlavičkou $9400).
 // ============================================================================
 
 const HS_N: byte = 5
-const HS_LEN: byte = 9
-var hsFile: byte[47] @ A_SCORES - 2      // hlavička PRG (2 B) + tabuľka od hsFile[2] – celé sa zapisuje na disk
+const HS_LEN: byte = 10                  // 6 číslic + 4 znaky mena
+const NAME_LEN: byte = 4
+var hsFile: byte[52] @ A_SCORES - 2      // hlavička PRG (2 B) + tabuľka od hsFile[2] – celé sa zapisuje na disk
 
 const T_TITLE:   byte[] = screenCodes("DUNGEON  WAR")
 const T_SUB:     byte[] = screenCodes("INTO THE DEPTHS")
@@ -30,12 +31,13 @@ var saveErr: bool = false                // posledný zápis skóre na disk zlyh
 
 // Predvolená tabuľka, keď "DW SCORES" na disku chýba.
 function defaultScores(): void {
-    for i = 0 to 44 { hsFile[2 + i] = 0 }
+    for i = 0 to 49 { hsFile[2 + i] = 0 }
     for k = 0 to HS_N - 1 {
         hsFile[2 + k * HS_LEN + 2] = 5 - k                 // 5000, 4000, … 1000
-        hsFile[2 + k * HS_LEN + 6] = 4                     // "DW " – D
+        hsFile[2 + k * HS_LEN + 6] = 4                     // "DW  " – D
         hsFile[2 + k * HS_LEN + 7] = 23                    // W
         hsFile[2 + k * HS_LEN + 8] = 32
+        hsFile[2 + k * HS_LEN + 9] = 32
     }
 }
 
@@ -180,18 +182,18 @@ function insertScore(p: byte, readonly name: byte[]): void {
     }
     var b: byte = scoreBase(p)
     for i = 0 to 5 { hsFile[2 + k * HS_LEN + i] = scoreD[b + i] }
-    for i = 0 to 2 { hsFile[2 + k * HS_LEN + 6 + i] = name[i] }
+    for i = 0 to NAME_LEN - 1 { hsFile[2 + k * HS_LEN + 6 + i] = name[i] }
 }
 
 function drawScores(row: byte, col: byte): void {
-    printAt(row, col + 1, T_HISCORE, 7)
+    printAt(row, col + 1, T_HISCORE, 7)          // 11 znakov nad 13-znakovou tabuľkou
     for k = 0 to HS_N - 1 {
         var a: uint16 = SCREEN + rowAddr(row + 2 + k * 2) + col
         var ca: uint16 = a - SCREEN + COLRAM
         poke(a, 49 + k)
-        for i = 0 to 2 { poke(a + 2 + i, hsFile[2 + k * HS_LEN + 6 + i]) }
-        for i = 0 to 5 { poke(a + 6 + i, 48 + hsFile[2 + k * HS_LEN + i]) }
-        for i = 0 to 11 { poke(ca + i, 1) }
+        for i = 0 to NAME_LEN - 1 { poke(a + 2 + i, hsFile[2 + k * HS_LEN + 6 + i]) }   // "1 ABCD 012300"
+        for i = 0 to 5 { poke(a + 7 + i, 48 + hsFile[2 + k * HS_LEN + i]) }
+        for i = 0 to 12 { poke(ca + i, 1) }
     }
 }
 
@@ -205,7 +207,7 @@ function showTitle(): void {
     printAt(13, 10, T_L3, 4)
     printAt(16, 10, T_L4, 7)
     printAt(19, 10, T_L5, 2)
-    drawScores(6, 24)
+    drawScores(6, 24)                          // blok legenda + tabuľka: stĺpce 4–36, medzi nimi 1 stĺpec
     printAt(22, 10, T_START, 1)
     printAt(23, 3, T_JOIN2, 3)
     printAt(24, 13, T_PAUSEK, 6)
@@ -242,7 +244,7 @@ const NAME_CHARS: byte[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 1
 var entryP: byte = 0
 var entryPos: byte = 0
 var entryIdx: byte = 0
-var entryName: byte[3] = [1, 1, 1]
+var entryName: byte[4] = [1, 32, 32, 32]
 var entryRep: byte = 0
 
 function showEntry(p: byte): void {
@@ -251,8 +253,7 @@ function showEntry(p: byte): void {
     entryIdx = 0
     entryRep = 20
     entryName[0] = 1
-    entryName[1] = 32
-    entryName[2] = 32
+    for i = 1 to NAME_LEN - 1 { entryName[i] = 32 }
     clearRows(2, 24)
     hideAll = true
     printAt(6, 17, T_PLAYERN, 1)
@@ -264,9 +265,9 @@ function showEntry(p: byte): void {
 }
 
 function drawEntry(): void {
-    var a: uint16 = SCREEN + rowAddr(14) + 18
+    var a: uint16 = SCREEN + rowAddr(14) + 18      // 4 znaky v strede (stĺpce 18–21)
     var ca: uint16 = a - SCREEN + COLRAM
-    for i = 0 to 2 {
+    for i = 0 to NAME_LEN - 1 {
         poke(a + i, entryName[i])
         var col: byte = 1
         if (i == entryPos) { col = 7 }
@@ -289,7 +290,7 @@ function updateEntry(joy: byte, press: bool): bool {
     }
     if (press) {
         entryPos = entryPos + 1
-        if (entryPos == 3) { return true }
+        if (entryPos == NAME_LEN) { return true }
         entryIdx = 26                                  // ďalšie písmeno začína medzerou
         entryName[entryPos] = 32
         entryRep = 10
