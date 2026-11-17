@@ -186,7 +186,7 @@ function insertScore(p: byte, readonly name: byte[]): void {
 }
 
 function drawScores(row: byte, col: byte): void {
-    printAt(row, col + 1, T_HISCORE, 7)          // 11 znakov nad 13-znakovou tabuľkou
+    printAt(row, col + 2, T_HISCORE, 7)          // nadpis o 2 znaky vpravo od začiatku tabuľky (úprava 2026-11-17)
     for k = 0 to HS_N - 1 {
         var a: uint16 = SCREEN + rowAddr(row + 2 + k * 2) + col
         var ca: uint16 = a - SCREEN + COLRAM
