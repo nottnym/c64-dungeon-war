@@ -288,8 +288,8 @@ function spawnMonster(i: byte, typ: byte): void {
 const MAX_SHOT: byte = 2
 
 var son: byte[2] = [0, 0]
-var sx: byte[2] = [0, 0]
-var sy: byte[2] = [0, 0]
+var shotX: byte[2] = [0, 0]
+var shotY: byte[2] = [0, 0]   // nie „sy“: kompilátor C#64 meno rozlíšil ako Mux2.sy (std:mux2) – strely prepisovali Y spritov 0–1 (2026-11-17)
 var sdir: byte[2] = [0, 0]
 var sown: byte[2] = [0, 0]                // príšera, ktorá strelu vystrelila (najviac 1 strela na kostlivca)
 var sbig: byte[2] = [0, 0]                // 1 = balvan strážcu (pomalší, iný sprite)
@@ -348,8 +348,8 @@ function fireShot(i: byte, d: byte): bool {
         if (son[k] == 0) {
             sown[k] = i
             son[k] = 1
-            sx[k] = CELL_PX[mcx[i]]
-            sy[k] = CELL_PX[mcy[i]]
+            shotX[k] = CELL_PX[mcx[i]]
+            shotY[k] = CELL_PX[mcy[i]]
             sdir[k] = d
             sbig[k] = 0
             if (mkind[i] == M_BOSS) { sbig[k] = 1  sfx(SFX_THROW) } else { sfx(SFX_SKEL) }
@@ -384,11 +384,11 @@ function advance(d: byte, n: byte): bool {
 function moveShots(): void {
     for k = 0 to MAX_SHOT - 1 {
         if (son[k] != 0) {
-            gX = sx[k]
-            gY = sy[k]
+            gX = shotX[k]
+            gY = shotY[k]
             var sp: byte = SHOT_SPEED
             if (sbig[k] != 0) { sp = BOULDER_SPEED }
-            if (advance(sdir[k], sp)) { sx[k] = gX  sy[k] = gY } else { son[k] = 0 }
+            if (advance(sdir[k], sp)) { shotX[k] = gX  shotY[k] = gY } else { son[k] = 0 }
         }
     }
 }

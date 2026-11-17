@@ -171,6 +171,15 @@ inline function putSprite(n: byte, x: byte, y: byte, col: byte, shape: byte): vo
     if (fresh || y != sprY[n]) { Mux2.sy[n] = y + 67  sprY[n] = y }
 }
 
+// Počet spritov, ktoré multiplexer spracúva (S_TOTAL = Mux2.st[0]). Triedi sa len prvých n položiek trvalej permutácie
+// order[] – tá sa preto musí zoradiť nanovo (0, 1, 2 …), inak by medzi prvými n mohli ostať nepoužité sprity 10/11
+// a potrebný sprite by vypadol (strela kostlivca bola neviditeľná a hráč zomrel „pri výstrele“ – hlásenie 2026-11-17).
+// IRQ číta len snapshot (entryL), order[] používa iba update() v hlavnej slučke.
+function setMuxTotal(n: byte): void {
+    Mux2.st[0] = n
+    for i = 0 to N_SPRITES - 1 { Mux2.order[i] = i }
+}
+
 function drawSprites(): void {
     if (hideAll) {
         for n = 0 to N_SPRITES - 1 { putSprite(n, 0, 0, 0, 0) }
@@ -190,7 +199,7 @@ function drawSprites(): void {
             if (sdir[k] == D_UP || sdir[k] == D_DOWN) { sh = SPR_ARROW_V }
             if (sbig[k] != 0) { sh = SPR_BOULDER  sc = COL_BOULDER }
         }
-        putSprite(SPR_SHOT0 + k, sx[k], sy[k], sc, sh)
+        putSprite(SPR_SHOT0 + k, shotX[k], shotY[k], sc, sh)
     }
     sh = 0
     if (aon[0] != 0) { sh = arrowShape(0) }
@@ -206,7 +215,7 @@ function drawSprites(): void {
 // Hráč 2 sa pripojí (raz za hru) tlačidlom fire na joysticku 1.
 function joinP2(): void {
     p2Joined = true
-    Mux2.st[0] = N_SPRITES                 // krok 11: sprity hráča 2 (10, 11) späť do multiplexera
+    setMuxTotal(N_SPRITES)                 // krok 11: sprity hráča 2 (10, 11) späť do multiplexera
     printAt(1, 31, T_BLANK9, 1)
     plives[1] = 3
     showLives(1, 3)
@@ -245,7 +254,7 @@ function newGame(f: byte): void {
     pstate[1] = PS_OUT                     // hráč 2 sa pripojí tlačidlom fire na joysticku 1
     plives[1] = 0
     p2Joined = false
-    Mux2.st[0] = N_SPRITES - 2             // krok 11: bez hráča 2 multiplexer spracúva len 10 spritov (S_TOTAL)
+    setMuxTotal(N_SPRITES - 2)             // krok 11: bez hráča 2 multiplexer spracúva len 10 spritov
     showLives(1, 0)
     printAt(1, 31, T_JOIN, 7)
     pfirePrev[0] = 1                       // fire držaný z obrazovky QUEST OVER nevyvedie hneď z brány

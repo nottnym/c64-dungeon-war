@@ -199,6 +199,7 @@ function drawScores(row: byte, col: byte): void {
 
 function showTitle(): void {
     clearScreen()
+    setMuxTotal(N_SPRITES)                     // titulka: sprity 1–6 (po hre mohlo ostať 10 a premiešané poradie)
     hideAll = false
     printAt(2, 14, T_TITLE, 7)
     printAt(3, 12, T_SUB, 2)

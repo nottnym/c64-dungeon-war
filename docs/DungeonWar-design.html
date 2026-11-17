@@ -734,6 +734,19 @@ podlažia. Premerané na C64U: ~25 Hz (kap. Krok 10), správa opravená.</td></t
 jeden blok asm).</td><td>Opravené, meranie s 1 aj 2 hráčmi doplnené.</td></tr>
 </table>
 
+<h3>Opravy po hraní: strely kostlivca a sprity (2026-11-17)</h3>
+<ul>
+<li><b>Hráč „sa teleportoval“ k bráne, zmizol alebo zomrel v okamihu výstrelu kostlivca:</b> pole striel sa volalo <code>sy</code> a kompilátor
+C#64 ho rozlíšil ako <code>Mux2.sy</code> (Y spritov multiplexera, <code>std:mux2</code>). Strela 0 zdieľala Y so spritom hráča, strela 1 so spritom
+príšery 0 – výstrel prepísal Y hráča riadkom kostlivca a strela naopak preberala Y hráča (zásah hneď). Predtým to maskovalo prepisovanie
+polôh každý snímok, od kroku 11 sa zapisujú len zmeny. Oprava: <code>shotX</code>/<code>shotY</code>; iné kolízie mien s knižnicou nie sú.
+Zistené z pamäte zastaveného emulátora (Analyzátor pamäte), overené hraním 5 podlaží.</li>
+<li><b>Streľba prestala po čase fungovať:</b> <code>runStopDown</code> vracal do <code>$DC00</code> prečítanú hodnotu – stlačený fire ostal vo výstupnom
+registri CIA natrvalo; teraz vždy <code>$FF</code> (commit <code>a60d347</code>).</li>
+<li><b>Poradie multiplexera pri zmene počtu spritov</b> (<code>setMuxTotal</code>): po hre dvoch hráčov mohli medzi prvými 10 položkami trvalej
+permutácie <code>order[]</code> ostať sprity 10/11 a potrebný sprite vypadnúť – poradie sa nanovo zoradí.</li>
+</ul>
+
 <h3>Krok 11 – výkon: pevný krok 25 Hz (2026-11-17)</h3>
 <ul>
 <li><b>Rozpis snímku na C64U</b> (3. podlažie, 1 hráč, riadky od začiatku snímku, nové meranie s pripočítaním 312 po ďalšom

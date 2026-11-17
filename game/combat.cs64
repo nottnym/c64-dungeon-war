@@ -82,8 +82,8 @@ function collide(): void {
         if (alive) {
             for k = 0 to MAX_SHOT - 1 {
                 if (son[k] != 0) {
-                    if (near(sx[k], ppx, HIT_SHOT)) {
-                        if (near(sy[k], ppy, HIT_SHOT)) {
+                    if (near(shotX[k], ppx, HIT_SHOT)) {
+                        if (near(shotY[k], ppy, HIT_SHOT)) {
                             son[k] = 0
                             killPlayer(p)
                         }

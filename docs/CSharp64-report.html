@@ -55,6 +55,11 @@ rozbalení inline <code>putSprite</code> na titulke, ktoré nahradila jedna oba�
 <tr><th>#</th><th>Zistenie</th><th>Dopad v hre</th><th>Návrh</th></tr>
 <tr class="ok"><td>K1</td><td>Porovnania bajtov v podmienkach (<code>a &amp;&amp; (b &amp; 2) == 0</code>) sa prekladali 16-bitovo cez <code>acc</code>.</td>
 <td>AI a kolízie stáli stovky bajtov aj rastrov.</td><td><b>Vyriešené</b> počas vývoja: bool porovnaní a <code>&amp;&amp;</code>/<code>||</code> sa prekladajú skokmi.</td></tr>
+<tr><td>K0</td><td><b>Chyba:</b> neprefixované meno globálneho poľa hry (<code>sy</code> v monster.cs64) sa rozlíšilo ako člen knižnice
+<code>Mux2.sy</code> z <code>uses std:mux2</code> – všetky zápisy aj čítania išli na <code>$CE20</code>, hoci premenná dostala vlastnú adresu
+(<code>$C24D</code>, len inicializácia).</td>
+<td>Strely kostlivca prepisovali Y spritov hráča a príšery: „teleport“, neviditeľný hráč, smrť pri výstrele. Hľadalo sa z pamäte emulátora.</td>
+<td>Meno modulu má prednosť pred členmi knižnice; pri nejednoznačnosti chyba alebo aspoň varovanie.</td></tr>
 <tr><td>K2</td><td>Volanie funkcie s parametrami je drahé: argumenty sa kopírujú do slotov a návratová hodnota ide 16-bitovo cez <code>acc</code>.</td>
 <td>Malé pomocné funkcie v horúcich slučkách treba robiť <code>inline</code>, čo však zväčšuje kód (napr. <code>absDiff</code> 2× = +140 B).</td>
 <td>Návrat bajtu v A, parametre v registroch alebo ZP pri listových funkciách.</td></tr>
