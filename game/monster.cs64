@@ -275,7 +275,7 @@ function spawnMonster(i: byte, typ: byte): void {
     macc[i] = 0
     mstep[i] = 0
     mspd[i] = speedOf(typ)
-    mcool[i] = 75
+    mcool[i] = SHOT_COOL
     mcloak[i] = SHADE_HIDE_TIME + (rand8() & 63)
     mshow[i] = 0
     if (typ == M_SKEL) { mshow[i] = 1  mcloak[i] = SKEL_SHOW_TIME }   // kostlivec začína viditeľný
@@ -403,21 +403,20 @@ var decBudget: byte = 2
 function moveMonster(i: byte): void {
     if (mcool[i] != 0) { mcool[i] = mcool[i] - 1 }
     if (mkind[i] == M_BOSS) { tickBoss() }
-    var mk0: byte = mkind[i]
-    if (mk0 == M_SHADE) {                        // zablysnutie: 1 s viditeľný každé 3–4 s
+    // tieň: 1 s viditeľný každé 3–4 s; kostlivec od 8. podlažia: ~3–4 s viditeľný, 1,5 s neviditeľný
+    var shade: bool = mkind[i] == M_SHADE
+    if (shade || (mkind[i] == M_SKEL && skelCloak)) {
         mcloak[i] = mcloak[i] - 1
         if (mcloak[i] == 0) {
             mshow[i] = mshow[i] ^ 1
-            if (mshow[i] != 0) { mcloak[i] = SHADE_SHOW_TIME  sfx(SFX_SHADE) }
-            else { mcloak[i] = SHADE_HIDE_TIME + (rand8() & 63) }
+            var r: byte = rand8() & 63
+            if (shade) {
+                if (mshow[i] != 0) { mcloak[i] = SHADE_SHOW_TIME  sfx(SFX_SHADE) } else { mcloak[i] = SHADE_HIDE_TIME + r }
+            } else {
+                if (mshow[i] != 0) { mcloak[i] = SKEL_SHOW_TIME + r } else { mcloak[i] = SKEL_HIDE_TIME }
+            }
         }
-    } else { if (mk0 == M_SKEL && skelCloak) {   // kostlivec od 8. podlažia: ~3–4 s viditeľný, 1,5 s neviditeľný
-        mcloak[i] = mcloak[i] - 1
-        if (mcloak[i] == 0) {
-            mshow[i] = mshow[i] ^ 1
-            if (mshow[i] != 0) { mcloak[i] = SKEL_SHOW_TIME + (rand8() & 63) } else { mcloak[i] = SKEL_HIDE_TIME }
-        }
-    } }
+    }
     if (moff[i] == 0 && decBudget == 0) { return }      // rozhodnutie až v ďalšom snímku
     if (moff[i] == 0 && mkind[i] == M_THIEF && mcy[i] == TUN_ROW && (mcx[i] == 0 || mcx[i] == MZ_W - 1)) {
         claimCell(i, 255)                        // zlodej utiekol tunelom
@@ -433,7 +432,8 @@ function moveMonster(i: byte): void {
     if (moff[i] == 0) {                          // stred bunky → rozhodnutie (a streľba kostlivca)
         decBudget = decBudget - 1
         var mk: byte = mkind[i]
-        if ((mk == M_SKEL || mk == M_BOSS) && mcool[i] == 0) {
+        // skrytý kostlivec (od 8. podlažia) nestrieľa – šíp by letel z ničoho (review k10 č. 3); inak má mshow = 1
+        if (((mk == M_SKEL && mshow[i] != 0) || mk == M_BOSS) && mcool[i] == 0) {
             var sd: byte = seesPlayer(i)
             if (sd != 0 && fireShot(i, sd)) {
                 mcool[i] = SHOT_COOL
@@ -488,8 +488,7 @@ function monY(i: byte): byte {
 // pri hode a na začiatku podlažia (bossShow).
 function monVisible(i: byte): bool {
     var k: byte = mkind[i]
-    if (k == M_SKEL) { if (!skelCloak) { return true } }
-    else { if (k != M_SHADE && k != M_BOSS) { return true } }
+    if (k != M_SHADE && k != M_BOSS && k != M_SKEL) { return true }   // kostlivec mimo 8.+ podlažia má mshow = 1
     if (torchTicks != 0) { return true }         // fakľa odhalí tiene
     if (k == M_BOSS) { if (bossShow != 0) { return true } }
     else { if (mshow[i] != 0) { return true } }

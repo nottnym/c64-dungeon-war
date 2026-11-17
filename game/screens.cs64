@@ -304,7 +304,7 @@ function runStopDown(): bool {
     var old: byte = peek($DC00)              // volá sa len pri pustenom joysticku 2 → je to obsah registra (aj stav
     poke($DC00, $7F)                         // virtuálneho joysticku C64U, ktorý do $DC00 zapisuje cez sieť)
     var k: byte = peek($DC01)
-    poke($DC00, old)
+    poke($DC00, old | $E0)                   // bity 5–7 nikdy nevyberú riadok klávesnice (review k10 č. 4)
     return (k & $80) == 0
 }
 

@@ -26,13 +26,14 @@ Podrobnosti po krokoch sú v <code>DungeonWar-design.html</code>, kap. 19.</p>
 
 <h2>1. Zhrnutie</h2>
 <ul>
-<li><b>Hra je hotová v čistom C#64</b> bez ručného assembleru v hernej logike. Výnimkou je 25-riadková rutina na čítanie kanála 15
-mechaniky, lebo <code>open()</code> nevie nastaviť sekundárnu adresu 15. Kompilátor zvládol 2 hráčov, 6 príšer s AI a BFS,
+<li><b>Hra je hotová v čistom C#64</b> bez ručného assembleru v hernej logike. Výnimkou sú dva krátke bloky <code>asm</code> pre kanál 15
+mechaniky (zmazanie súboru, prečítanie odpovede), lebo <code>open()</code> nevie nastaviť sekundárnu adresu 15. Kompilátor zvládol 2 hráčov, 6 príšer s AI a BFS,
 12 logických spritov cez <code>std:mux2</code>, hudbu GT2 v IRQ aj ukladanie na disk.</li>
-<li><b>Výkon:</b> na C64 Ultimate stíha logika 50 Hz pri jednom hráčovi. Pri dvoch hráčoch a šiestich príšerách zmešká
-multiplexer ~2 % snímkov (66 za minútu). Prejaví sa to ako krátke zopakovanie snímku, hra sa nerozpadne.</li>
-<li><b>Veľkosť kódu</b> je najväčšie obmedzenie: program s konštantami zaberá <code>$0801–$833B</code> (~31 KB). Pod obrazovkou na
-<code>$8400</code> ostáva ~200 B. Asi polovicu tvorí réžia, ktorej by sa lepší kompilátor vedel vyhnúť (pozri kap. 3).</li>
+<li><b>Výkon:</b> na C64 Ultimate hlavná slučka na bežnom podlaží so šiestimi príšerami takmer v každom priechode pretečie snímok,
+a to s jedným aj s dvoma hráčmi. Multiplexer vtedy zopakuje predošlý obraz, takže logika beží efektívne ~25 Hz. Hra je hrateľná,
+lebo rýchlosti príšer sa ladili už v takto bežiacej hre. Pre 50 Hz by bolo treba zhruba polovičnú prácu na snímok (kap. 6).</li>
+<li><b>Veľkosť kódu</b> je najväčšie obmedzenie: program s konštantami zaberá <code>$0801–$8326</code> (~31 KB). Pod obrazovkou na
+<code>$8400</code> ostáva ~217 B. Časť tvorí réžia, ktorej by sa lepší kompilátor vedel vyhnúť (kap. 3). Jej podiel som nemeral.</li>
 <li><b>Najdrahšie chyby</b> nespôsobil kompilátor, ale prostredie: ROM BASIC-u nad <code>$A000</code> a PETSCII v mene súboru. Plochá RAM
 ladidla a rozdiely medzi emulátormi ich zakryli.</li>
 </ul>
@@ -43,9 +44,9 @@ ladidla a rozdiely medzi emulátormi ich zakryli.</li>
 <tr><td>7</td><td>priebeh podlaží, zlodej, predmety, temné podlažie</td><td><code>$654C</code></td></tr>
 <tr><td>8</td><td>strážca hĺbky</td><td><code>$6AFB</code> (s konštantami)</td></tr>
 <tr><td>9</td><td>zvuk, hudba GT2, titulka, skóre na disku</td><td><code>$7FF5</code> → po review <code>$8156</code></td></tr>
-<tr><td>10</td><td>životy navyše, neviditeľné kostlivce, ladiace konštanty, meranie</td><td><code>$833B</code></td></tr>
+<tr><td>10</td><td>životy navyše, neviditeľné kostlivce, ladiace konštanty, meranie; po review</td><td><code>$8339</code> → <code>$8327</code></td></tr>
 </table></div>
-<p>Krok 9 pridal ~5,3 KB. Z toho ~2,2 KB tvorili funkcie, ktoré kompilátor sám vložil do <code>main</code>. Ďalší 1 KB spôsobilo osem
+<p>Krok 9 pridal ~5,3 KB do prvej verzie (<code>$7FF5</code>), s opravami po review ~5,6 KB. Z toho ~2,2 KB tvorili funkcie, ktoré kompilátor sám vložil do <code>main</code>. Ďalší 1 KB spôsobilo osem
 rozbalení inline <code>putSprite</code> na titulke, ktoré nahradila jedna obaľovacia funkcia.</p>
 
 <h2>3. Námety pre kompilátor</h2>
@@ -64,7 +65,7 @@ rozbalení inline <code>putSprite</code> na titulke, ktoré nahradila jedna oba�
 <tr><td>K6</td><td>Dočasné bunky na <code>$0340–$0348</code> (páskový buffer).</td><td>V hre bez problému. Pri programe, ktorý používa pásku, by to bola tichá chyba.</td>
 <td>Uviesť v dokumentácii, prípadne nastaviteľná oblasť cez <code>memoryLayout</code>.</td></tr>
 <tr class="warn"><td>K7</td><td>Kompilátor nekontroluje, či kód nepretečie do pamäte, ktorú program používa inak (obrazovka <code>$8400</code>).</td>
-<td>Pri kroku 9 kód s konštantami siahol za <code>$8400</code>. Prejavilo sa to až na obrazovke.</td>
+<td>Pri kroku 9 sa rezerva zmenšila z ~6 KB na ~1 KB, pri kroku 10 na ~200 B. Pretečenie by sa prejavilo až chybami na obrazovke.</td>
 <td><code>memoryLayout { codeTop = $8400 }</code> s chybou pri prekročení. V hre to zatiaľ rieši kontrola v <code>build.sh</code>.</td></tr>
 <tr class="warn"><td>K8</td><td>Reťazcové literály sa prekladajú ako PETSCII (<code>.pet</code>), veľké písmená sú shiftnuté (<code>$C1–$DA</code>). Mená v
 <code>loadFile</code> a v adresári D64 sú však nešiftnuté.</td>
@@ -74,6 +75,7 @@ rozbalení inline <code>putSprite</code> na titulke, ktoré nahradila jedna oba�
 <td>Šum vo výstupe každého buildu.</td><td>Potlačenie varovania pre jedno pole (napr. <code>@io</code>).</td></tr>
 <tr><td>K10</td><td>V <code>asm { }</code> nie sú viditeľné premenné C#64 pod menom.</td><td>Výmena dát s asm cez pole na pevnej adrese (<code>$02A7</code>).</td>
 <td>Prístup k symbolom (napr. <code>{meno}</code>) alebo dokumentovaný mangling.</td></tr>
+<tr><td>K12</td><td>Lokálna premenná s menom parametra (<code>var v</code> v <code>addScore</code>) ho zatieni a zaberie nový slot RAM, bez varovania.</td><td>Malý (RAM).</td><td>Varovanie pri zatienení parametra.</td></tr>
 <tr><td>K11</td><td><code>step</code> je kľúčové slovo, <code>rnd</code> vyhradené meno.</td><td>Hlášky sú zrozumiteľné.</td><td>Poznámka.</td></tr>
 </table></div>
 
@@ -83,6 +85,10 @@ rozbalení inline <code>putSprite</code> na titulke, ktoré nahradila jedna oba�
 <tr class="ok"><td>L1</td><td><code>std:mux2</code> mal ukazovatele spritov napevno na <code>$07F8</code>.</td><td><b>Opravené:</b> <code>Mux2.setScreen(addr)</code>.</td></tr>
 <tr class="bad"><td>L2</td><td><code>Mux2.setMusicPlay</code> prepisuje operand <code>JSR</code> v IRQ po bajtoch. IRQ medzi zápismi skočí na polovičnú adresu.</td>
 <td>Zápis pod <code>sei</code>/<code>cli</code> priamo v knižnici, alebo upozornenie v dokumentácii. V hre to rieši obalenie <code>sei()</code>/<code>cli()</code>.</td></tr>
+<tr class="warn"><td>L7</td><td><code>Mux2.wasLate()</code> po <code>waitFrame()</code> pretečenie nevidí: príznak nastaví frame-start počas logiky, no ďalší
+frame-start (na ktorý <code>waitFrame</code> čaká) ho po hotovom <code>update()</code> vynuluje. Treba ho čítať pred <code>waitFrame()</code>.</td>
+<td>Uviesť v dokumentácii, alebo počítadlo zmeškaných snímkov priamo v knižnici. Prvé meranie hry kvôli tomu ukázalo ~2 % namiesto skutočných
+~60 % (review kroku 10).</td></tr>
 <tr><td>L3</td><td><code>Mux2.setSprite</code> pre 10 spritov každý snímok ≈ 100 rastrov.</td><td>V hre vyrovnávacia pamäť (<code>putSprite</code> volá len pri zmene). Knižnici by pomohlo „nastav všetko, prepočítaj zmenené“.</td></tr>
 <tr><td>L4</td><td><code>open()</code> nevie sekundárnu adresu 15 (kanál príkazov a chýb mechaniky). <code>ioResult()</code> nevidí chyby DOS-u.</td>
 <td><code>diskCommand("S0:…")</code> a <code>diskStatus()</code> v štandardnej knižnici. V hre to rieši vlastná asm rutina.</td></tr>
@@ -111,16 +117,22 @@ podľa polohy kláves, takže úvodzovky a niektoré písmená sa nedajú napís
 </table></div>
 
 <h2>6. Meranie na C64 Ultimate (17. 11. 2026)</h2>
+<p>Meria sa len v snímkoch hry (nie titulka, úvod, koniec ani snímok so začiatkom podlažia), počítadlá sa nulujú pri štarte podlažia.
+Pretečenie = pred <code>waitFrame()</code> je nastavený <code>Mux2.wasLate()</code>, čiže multiplexer musel zopakovať snímok
+(16-bitové počítadlo <code>$02FB–$02FC</code>).</p>
 <div class="wrap"><table>
-<tr><th>Situácia</th><th>Oneskorené snímky</th><th>Najdlhší snímok bez BFS</th><th>S BFS</th></tr>
-<tr><td>Podlažie 3, 2 hráči, 6 príšer, ~70 s</td><td>66 (~2 %)</td><td>~310 riadkov*</td><td>~200 riadkov</td></tr>
-<tr><td>Podlažie 4 (temné), 2 hráči, ~60 s</td><td>62 (~2 %)</td><td>~310 riadkov*</td><td>~168 riadkov</td></tr>
+<tr><th>Situácia (~70 s)</th><th>Pretečené priechody</th><th>Najdlhší snímok s BFS</th></tr>
+<tr><td>Podlažie 3, 1 hráč, 6 príšer</td><td>2114</td><td>~120 riadkov</td></tr>
+<tr><td>Podlažie 3, 2 hráči, 6 príšer</td><td>2148</td><td>~204 riadkov</td></tr>
 </table></div>
-<p>* Meranie (<code>$02FD</code>/<code>$02FE</code>) počíta čas modulo snímok. Snímok, ktorý pretečie, sa do maxima nedostane, preto je
-spoľahlivým ukazovateľom počet oneskorených snímkov (<code>Mux2.wasLate</code>, bunka <code>$02FC</code>). Temné podlažie neprináša navyše
-viditeľnú záťaž. Prekročenia vznikajú pri súbehu rozhodnutí AI dvoch hráčov a príšer. Ďalší krok optimalizácie by bol striedať
-logiku príšer po snímkoch, no bráni tomu rezerva pamäte (~200 B).</p>
-<p>Na zariadení sa overilo aj toto: titulka a legenda so spritmi, hudba sa spustí (zvuk posúdi používateľ), znelka a úvod podlažia,
-temné podlažie s odhaľovaním stien, pauza RUN/STOP z klávesnice zariadenia.</p>
+<p>Pretečený priechod trvá dva snímky, takže ~2100 pretečení za ~70–85 s znamená, že pretečie takmer každý priechod. Logika beží
+~25 Hz a nezáleží veľmi na počte hráčov, rozhodujú príšery a sprity. Bunka „najdlhší snímok bez BFS“ (<code>$02FD</code>) ukazuje vždy
+~310 riadkov. Meria čas modulo snímok, takže pretečený snímok sa do nej nedostane a nie je použiteľná. Prvé meranie (krok 10 pred review)
+čítalo <code>wasLate</code> po <code>waitFrame</code> a vyšlo ~2 %, čo bolo nesprávne (L7).</p>
+<p>Cesty k 50 Hz: logiku príšer striedať po snímkoch (polovica príšer v párnych, polovica v nepárnych snímkoch, dvojnásobný krok),
+radar a predmety nespracúvať každý snímok, lacnejší <code>setSprite</code> v knižnici (L3). Bráni tomu rezerva pamäte (~217 B). Riešením
+by bolo presunúť dáta alebo časť kódu pod KERNAL (<code>$E000–$FFFF</code>) alebo do <code>$B500–$BFFF</code>.</p>
+<p>Na zariadení sa overilo aj toto: titulka a legenda so spritmi, znelka a úvod podlažia (zvuk posúdi používateľ), temné podlažie s
+odhaľovaním stien, pauza RUN/STOP z klávesnice zariadenia.</p>
 </body>
 </html>

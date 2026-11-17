@@ -9,17 +9,16 @@ dotnet "$CS64BUILD" dungeon.cs64 build/dungeon.prg --asm build/dungeon.asm \
     --d64 build/dungeon.d64 --diskname "DUNGEON WAR" --diskid DW --mainname "DUNGEON WAR"
 
 # Krok 10: kód a konštanty musia skončiť pod obrazovkou $8400 (layout.cs64: A_CODE_TOP) – kompilátor to nekontroluje.
-python -I - <<'PY'
-import re, sys
-top = 0
-for line in open('build/dungeon.labels', encoding='utf-8'):
-    m = re.match(r'\$([0-9A-F]{4}) <cs64>::(\S+)', line)
-    if m:
-        a = int(m.group(1), 16)
-        if 0x0801 <= a < 0x8800 and not m.group(2).startswith('Mux2_'):
-            top = max(top, a)
-# za posledným návestím môže byť ešte reťazec/tabuľka – preto rezerva 64 B
-print(f'koniec kódu ~${top:04X} (rezerva do $8400: {0x8400 - top} B)')
-if top >= 0x8400 - 64:
-    print('CHYBA: kód zasahuje do obrazovky $8400', file=sys.stderr); sys.exit(1)
+# Koniec sa berie z PRG: program je súvislý od $0801, medzera po charset $8800 je vyplnená nulami (review k10 č. 2).
+python -I - <<'PY' || { rm -f build/dungeon.prg build/dungeon.d64; exit 1; }
+import sys
+d = open('build/dungeon.prg', 'rb').read()
+base = d[0] | d[1] << 8
+code = d[2:2 + 0x8400 - base]                   # $0801..$83FF
+end = base + len(code.rstrip(bytes(1))) + 1        # +1: koncová nula posledného reťazca
+tail = d[2 + 0x8400 - base:2 + 0x87E8 - base]   # obrazovka $8400..$87E7 musí byť v PRG prázdna
+print(f'koniec kódu ${end:04X} (rezerva do $8400: {0x8400 - end} B)')
+if end > 0x8400 or any(tail):
+    print('CHYBA: kód zasahuje do obrazovky $8400 – build/dungeon.prg a .d64 zmazané', file=sys.stderr)
+    sys.exit(1)
 PY

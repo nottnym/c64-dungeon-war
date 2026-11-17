@@ -689,11 +689,12 @@ cooldownu balvana a časovačov tieňa nahradili pomenované konštanty, správa
 úvod podlažia, hra, temné podlažie, pauza RUN/STOP z klávesnice zariadenia. Virtuálny joystick C64U zapisuje do <code>$DC00</code>,
 preto hra už <code>$DC00 = $FF</code> nenastavuje každý snímok: len raz po štarte multiplexera a po uložení. Sken RUN/STOP hodnotu vracia.
 Port 1 virtuálneho joysticku (DDR B na výstup) vyzerá pre sken ako RUN/STOP. S fyzickým joystickom sa to nestane.</li>
-<li><b>Meranie</b> len v snímkoch hry (nie titulka, úvod, koniec ani snímok so začiatkom podlažia), nová bunka <code>$02FC</code> = počet
-oneskorených snímkov (<code>Mux2.wasLate</code>). Na C64U pri 2 hráčoch: 3. podlažie 66 oneskorených za ~70 s, temné 4. podlažie 62 za
-~60 s (~2 %). Snímky s BFS do ~200 riadkov. Podrobnosti v <code>docs/CSharp64-report.html</code>, kap. 6.</li>
+<li><b>Meranie</b> len v snímkoch hry (nie titulka, úvod, koniec ani snímok so začiatkom podlažia), nulované pri štarte podlažia.
+<code>$02FB–$02FC</code> = 16-bitový počet pretečených priechodov (<code>Mux2.wasLate()</code> čítané <b>pred</b> <code>waitFrame</code>, review k10).
+Na C64U, 3. podlažie, ~70 s: 1 hráč 2114, 2 hráči 2148 pretečení. Takmer každý priechod pretečie, logika beží ~25 Hz. Prvé meranie
+(~2 %) bolo chybné. Snímky s BFS do ~120 (1 hráč) / ~204 (2 hráči) riadkov. Podrobnosti v <code>docs/CSharp64-report.html</code>, kap. 6.</li>
 <li><b>Kontrola veľkosti v <code>build.sh</code>:</b> zostavenie zlyhá, ak kód s konštantami siaha nad <code>$8400 − 64</code>. Koniec kódu
-<code>$833B</code>, rezerva ~200 B.</li>
+<code>$833B</code>, rezerva ~200 B (po review: koniec z PRG, <code>$8327</code>, 217 B).</li>
 <li><b>Správa o C#64:</b> <code>docs/CSharp64-report.html</code> (námety pre kompilátor, knižnice a nástroje, veľkosť kódu, meranie).</li>
 </ul>
 <table>
@@ -714,6 +715,23 @@ oneskorených snímkov (<code>Mux2.wasLate</code>). Na C64U pri 2 hráčoch: 3. 
 <tr><td><code>EXTRA_FIRST</code>, <code>EXTRA_EVERY</code></td><td>1, 2</td><td>životy navyše (× 10 000 bodov)</td></tr>
 <tr><td><code>ITEM_LIFE</code>, <code>TORCH_TICKS</code>, <code>CHEST_CHANCE</code>, <code>TORCH_CHANCE</code></td><td>62, 50, 6, 3</td><td>predmety (jednotka 8 snímok; šanca z 256)</td></tr>
 <tr><td><code>BONUS_TICKS</code></td><td>94</td><td>pokladnica ~15 s</td></tr>
+</table>
+
+<h3>Code review kroku 10 (nezávislý agent, 2026-11-17) – opravené</h3>
+<table>
+<tr><th>#</th><th>Nález</th><th>Riešenie</th></tr>
+<tr><td>1</td><td><b>Vysoká:</b> <code>Mux2.wasLate()</code> čítané po <code>waitFrame()</code> nevidí pretečenie (ďalší frame-start príznak vynuluje),
+meranie ~2 % bolo nesprávne.</td><td>Čítané pred <code>waitFrame</code> (predošlý snímok bol hra), 16-bitové počítadlo, nulovanie pri štarte
+podlažia. Premerané na C64U: ~25 Hz (kap. Krok 10), správa opravená.</td></tr>
+<tr><td>2</td><td>Kontrola v <code>build.sh</code> merala posledné návestie (nie koniec kódu) a brala 64 B rezervy. Pri chybe nechala pokazený obraz.</td>
+<td>Koniec z PRG (nuly za kódom), kontrola aj prázdnej obrazovky v PRG; pri chybe sa <code>dungeon.prg</code>/<code>.d64</code> zmažú.</td></tr>
+<tr><td>3</td><td>Neviditeľný kostlivec strieľal vždy neviditeľný (strieľa od 3 buniek, viditeľný až pod 3).</td><td>Skrytý kostlivec nestrieľa.</td></tr>
+<tr><td>4</td><td><code>runStopDown</code> mohol vrátiť do <code>$DC00</code> hodnotu s vybraným riadkom (bity 5–7).</td><td><code>old | $E0</code>.</td></tr>
+<tr><td>5</td><td>Počítadlo sa nasycovalo, posun o snímok voči stavu.</td><td>Viď č. 1.</td></tr>
+<tr><td>6, 8</td><td>Zbytočné bajty: podmienka <code>&lt; 250</code> pri životoch navyše, zatienený parameter <code>v</code>, dvojitá vetva v
+<code>monVisible</code>, dva takmer rovnaké bloky časovačov viditeľnosti.</td><td>Zjednodušené (−18 B aj s 16-bit počítadlom).</td></tr>
+<tr><td>7</td><td>Správa o C#64: nepodložené tvrdenia (kód za <code>$8400</code> v kroku 9, „polovica réžia“, meranie 1 hráča, „66 za minútu“,
+jeden blok asm).</td><td>Opravené, meranie s 1 aj 2 hráčmi doplnené.</td></tr>
 </table>
 
 <h3>Otočenie na mieste pri stene (2026-11-16)</h3>
