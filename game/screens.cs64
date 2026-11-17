@@ -303,11 +303,18 @@ function updateEntry(joy: byte, press: bool): bool {
 // --- klávesnica: RUN/STOP (riadok 7, stĺpec 7) – $DC00 sa vráti na $FF, aby klávesy nečítal joystick 1 ---
 // Po skene vždy $FF: obnovenie prečítanej hodnoty zapisovalo do výstupného registra aj práve stlačený fire/smer
 // (stlačenie medzi Joy.read2 a týmto čítaním) – bit ostal v nule natrvalo, fire sa javil držaný a streľba prestala
-// fungovať (hlásenie 2026-11-17). Virtuálny joystick C64U pri pustenom joysticku aj tak zapisuje $FF.
+// fungovať (hlásenie 2026-11-17).
+// Review opráv: virtuálny joystick C64U zapisuje do $DC00 – zápis $FF by mohol prepísať jeho práve zapísané stlačenie.
+// Preto sken pod sei len vtedy, keď $DC00 číta $FF (joystick 2 pustený), okno medzi kontrolou a zápisom je pár cyklov.
 function runStopDown(): bool {
-    poke($DC00, $7F)
-    var k: byte = peek($DC01)
-    poke($DC00, $FF)
+    var k: byte = $FF
+    sei()
+    if (peek($DC00) == $FF) {
+        poke($DC00, $7F)
+        k = peek($DC01)
+        poke($DC00, $FF)
+    }
+    cli()
     return (k & $80) == 0
 }
 

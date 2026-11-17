@@ -98,11 +98,11 @@ function sfx(id: byte): void {
 // Raz za snímok (po logike hry).
 function sfxTick(): void {
     for v = 0 to 1 {
-        var st: byte = sfxOn[v]
-        if (st != 0) {
+        var sfxSt: byte = sfxOn[v]
+        if (sfxSt != 0) {
             var r: byte = V7[v]
             var p: byte = sfxPos[v]
-            if (st == 1) {                       // hard restart: test bit, nová obálka, šírka pulzu 50 %
+            if (sfxSt == 1) {                       // hard restart: test bit, nová obálka, šírka pulzu 50 %
                 sidReg[r + 4] = $08
                 sidReg[r + 5] = SFX_DATA[p]
                 sidReg[r + 6] = SFX_DATA[p + 1]

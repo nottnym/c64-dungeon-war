@@ -174,7 +174,7 @@ inline function putSprite(n: byte, x: byte, y: byte, col: byte, shape: byte): vo
 // Počet spritov, ktoré multiplexer spracúva (S_TOTAL = Mux2.st[0]). Triedi sa len prvých n položiek trvalej permutácie
 // order[] – tá sa preto musí zoradiť nanovo (0, 1, 2 …), inak by medzi prvými n mohli ostať nepoužité sprity 10/11
 // a potrebný sprite by vypadol (strela kostlivca bola neviditeľná a hráč zomrel „pri výstrele“ – hlásenie 2026-11-17).
-// IRQ číta len snapshot (entryL), order[] používa iba update() v hlavnej slučke.
+// IRQ číta len snapshot (entryL), order[] používa iba update() v hlavnej slučke – nevolať z IRQ ani počas update().
 function setMuxTotal(n: byte): void {
     Mux2.st[0] = n
     for i = 0 to N_SPRITES - 1 { Mux2.order[i] = i }
@@ -437,13 +437,13 @@ function main(): void {
             }
         } else {
             if (joy == 0) {                        // RUN/STOP = pauza; s pohnutým joystickom 2 by sken vybral iné riadky
-                var stop: bool = runStopDown()     // (review k9 č. 5) – vtedy sa stav nemení, nevznikne falošná hrana
-                if (stop && !stopPrev) {
+                var stopNow: bool = runStopDown()     // (review k9 č. 5) – vtedy sa stav nemení, nevznikne falošná hrana
+                if (stopNow && !stopPrev) {
                     paused = !paused
                     soundPause(paused)
                     showPaused(paused)
                 }
-                stopPrev = stop
+                stopPrev = stopNow
             }
             if (!paused) {
                 if (peek(DBG_REQ) != 0 && (frame & 7) != 0) { dbgOn = 1  poke(DBG_REQ, 0) }

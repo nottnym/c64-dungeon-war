@@ -209,11 +209,11 @@ function killPlayer(p: byte): void {
 
 // Jeden snímok hráča podľa stavu (brána, živý – pohyb a streľba na stlačenie fire, výbuch).
 function updatePlayer(p: byte, joy: byte): void {
-    var fire: byte = joy & 16
-    var press: bool = fire != 0 && pfirePrev[p] == 0
-    pfirePrev[p] = fire
-    var st: byte = pstate[p]
-    if (st == PS_GATE) {
+    var fireBit: byte = joy & 16
+    var press: bool = fireBit != 0 && pfirePrev[p] == 0
+    pfirePrev[p] = fireBit
+    var pst: byte = pstate[p]
+    if (pst == PS_GATE) {
         ptimer[p] = ptimer[p] - 1
         if (ptimer[p] == 0) {
             ptimer[p] = 50
@@ -223,7 +223,7 @@ function updatePlayer(p: byte, joy: byte): void {
         if (press || psecs[p] == 0 || (joy & D_UP) != 0) { leaveGate(p) }
         return
     }
-    if (st == PS_DYING) {
+    if (pst == PS_DYING) {
         ptimer[p] = ptimer[p] - 1
         if (ptimer[p] == 0) {
             plives[p] = plives[p] - 1
@@ -232,7 +232,7 @@ function updatePlayer(p: byte, joy: byte): void {
         }
         return
     }
-    if (st != PS_ALIVE) { return }
+    if (pst != PS_ALIVE) { return }
     if (pinv[p] != 0) { pinv[p] = pinv[p] - 1 }
     movePlayer(p, joy)
     if (press && aon[p] == 0) { fireArrow(p) }

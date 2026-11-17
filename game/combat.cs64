@@ -32,7 +32,7 @@ function collide(): void {
             if (mtype[i] != M_NONE) {
                 var mx: byte = mxp[i]               // updateMonPos (raz za snímok)
                 var my: byte = myp[i]
-                var hit: bool = false
+                var hitMon: bool = false
                 var hx: byte = HIT_ARROW                 // strážca je široký 2 sprity (boss.cs64)
                 var hy: byte = HIT_ARROW
                 var boss: bool = mkind[i] == M_BOSS
@@ -40,7 +40,7 @@ function collide(): void {
                 if (aon[p] != 0) {
                     if (near(ax[p], mx, hx)) {
                         if (near(ay[p], my, hy)) {
-                            hit = true
+                            hitMon = true
                             aon[p] = 0
                             if (boss) { hitBoss(p) }
                             else {
@@ -50,7 +50,7 @@ function collide(): void {
                         }
                     }
                 }
-                if (!hit && alive && mkind[i] != M_THIEF) {   // zlodej je bonusový cieľ – dotykom nezabíja
+                if (!hitMon && alive && mkind[i] != M_THIEF) {   // zlodej je bonusový cieľ – dotykom nezabíja
                     var bodyX: bool = false
                     if (boss) { bodyX = absDiff(ppx, mx) < HIT_BOSS_X }   // 20 > 16: near by pretieklo (stĺpec 0 vs 10)
                     else { bodyX = near(ppx, mx, HIT_BODY) }
