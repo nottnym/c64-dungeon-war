@@ -29,8 +29,8 @@ var pface: byte[2] = [D_UP, D_UP]        // smer pohľadu (sprite)
 var pstep: byte[2] = [0, 0]              // počítadlo pixelov pre animáciu
 var pcx: byte[2] = [0, 10]               // posledná bunka, ktorej stredom hráč prešiel (cieľ AI)
 var pcy: byte[2] = [5, 5]
-// Otočenie na mieste: hráč stojaci čelom k stene sa pri joysticku do protismeru najprv len otočí (môže strieľať
-// na druhú stranu); pohyb začne, až keď joystick drží ďalej TURN_HOLD snímok (úprava 2026-11-16).
+// Otočenie na mieste: stojaci hráč sa pri joysticku do protismeru najprv len otočí (môže strieľať na druhú stranu);
+// pohyb začne, až keď joystick drží ďalej TURN_HOLD snímok (úprava 2026-11-16, od 2026-11-17 nielen pri stene).
 const TURN_HOLD: byte = 10
 var pturn: byte[2] = [0, 0]
 var tunShut: byte = 0                    // > 0 = tunely zavalené (odpočet snímok)
@@ -106,8 +106,8 @@ function movePlayer(p: byte, joy: byte): void {
                     if (pturn[p] != 0) { return }
                 }
             } else {
-                if (want != 0 && want == opposite(pface[p]) && !canGo(cx, cy, pface[p])) {
-                    pface[p] = want                      // čelom k stene → len otočiť
+                if (want != 0 && want == opposite(pface[p])) {
+                    pface[p] = want                      // protismer → len otočiť (kdekoľvek, nielen pri stene)
                     pturn[p] = TURN_HOLD
                     return
                 }
